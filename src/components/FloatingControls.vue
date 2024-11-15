@@ -20,8 +20,7 @@
       <input
         type="range"
         id="fontSize"
-        :value="fontSize"
-        @input="updateFontSize($event.target.value)"
+        v-model="fontSize"
         min="10"
         max="30"
         step="1"
@@ -35,8 +34,7 @@
       <input
         type="range"
         id="headingFontSize"
-        :value="headingFontSize"
-        @input="updateHeadingFontSize($event.target.value)"
+        v-model="headingFontSize"
         min="20"
         max="40"
         step="1"
@@ -46,49 +44,33 @@
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue'
+<script setup lang="ts">
+import {type Ref } from 'vue'
 
-export default defineComponent({
-  name: 'FloatingControls',
-  props: {
-    currentPage: {
-      type: Number,
-      required: true,
-    },
-    totalPages: {
-      type: Number,
-      required: true,
-    },
-    progress: {
-      type: Number,
-      required: true,
-    },
-    fontSize: {
-      type: Number,
-      required: true,
-    },
-    headingFontSize: {
-      type: Number,
-      required: true,
-    },
+const emit = defineEmits(['prev-page', 'next-page'])
+defineProps({
+  currentPage: {
+    type: Number,
+    required: true,
   },
-  emits: ['prev-page', 'next-page', 'update:fontSize', 'update:headingFontSize'],
-  methods: {
-    prevPage() {
-      this.$emit('prev-page')
-    },
-    nextPage() {
-      this.$emit('next-page')
-    },
-    updateFontSize(value: number) {
-      this.$emit('update:fontSize', Number(value))
-    },
-    updateHeadingFontSize(value: number) {
-      this.$emit('update:headingFontSize', Number(value))
-    },
+  totalPages: {
+    type: Number,
+    required: true,
+  },
+  progress: {
+    type: Number,
+    required: true,
   },
 })
+const headingFontSize:Ref<number> = defineModel<number>('headingFontSize',{required:true})
+const fontSize:Ref<number> = defineModel<number>('fontSize',{required:true})
+
+const prevPage = ()=>{
+      emit('prev-page')
+};
+const nextPage = ()=>{
+      emit('next-page')
+};
 </script>
 
 <style scoped>
