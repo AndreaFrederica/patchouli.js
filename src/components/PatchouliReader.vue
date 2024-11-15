@@ -161,7 +161,8 @@ export default defineComponent({
       adjustFontSize()
       pages.value = getPages(rawElements.value as HTMLElement[])
       if (pageIndex === null) {
-        const temp = Math.floor(totalPages.value * readProgress.value)
+        //! 这堆抽象东西用来防止拖字体大小拉爆阅读器
+        const temp = Math.round(totalPages.value * readProgress.value)
         // console.log("will to",temp,"max",totalPages.value)
         if (temp >= totalPages.value - 1) {
           // console.log("too high")
