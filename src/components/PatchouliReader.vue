@@ -57,14 +57,16 @@ export default defineComponent({
     const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100)
 
     const handleResize = () => {
-      // readerWidth.value = patchouliReader.value?.offsetWidth
-      // maxHeight.value = patchouliReader.value?.offsetHeight
-      //TODO 更改成vue风格
-      const readerApp = document.getElementById('patchouli-reader') as HTMLElement
-      if (readerApp) {
-        readerWidth.value = readerApp.offsetWidth
-        maxHeight.value = readerApp.offsetHeight
+      if (patchouliReader.value) {
+        readerWidth.value = patchouliReader.value.offsetWidth
+        maxHeight.value = patchouliReader.value.offsetHeight
       }
+      //TODO 更改成vue风格
+      // const readerApp = document.getElementById('patchouli-reader') as HTMLElement
+      // if (readerApp) {
+      //   readerWidth.value = readerApp.offsetWidth
+      //   maxHeight.value = readerApp.offsetHeight
+      // }
       showPage() // 页面重新布局
     }
 
@@ -237,15 +239,17 @@ export default defineComponent({
     // 生命周期钩子
     onMounted(() => {
       nextTick(() => {
-        // // 等待 Vue 完成 DOM 更新后获取元素的尺寸
-        // readerWidth.value = patchouliReader.value.offsetWidth
-        // maxHeight.value = patchouliReader.value.offsetHeight
-        //TODO 更改成vue风格
-        const readerApp = document.getElementById('patchouli-reader') as HTMLElement
-        if (readerApp) {
-          readerWidth.value = readerApp.offsetWidth
-          maxHeight.value = readerApp.offsetHeight
+        // 等待 Vue 完成 DOM 更新后获取元素的尺寸
+        if (patchouliReader.value) {
+          readerWidth.value = patchouliReader.value.offsetWidth
+          maxHeight.value = patchouliReader.value.offsetHeight
         }
+        //TODO 更改成vue风格
+        // const readerApp = document.getElementById('patchouli-reader') as HTMLElement
+        // if (readerApp) {
+        //   readerWidth.value = readerApp.offsetWidth
+        //   maxHeight.value = readerApp.offsetHeight
+        // }
         // console.log('width', readerWidth.value, 'height', maxHeight.value)
         loadContent()
         window.addEventListener('resize', handleResize)
@@ -269,6 +273,7 @@ export default defineComponent({
       updateHeadingFontSize,
       showPage,
       patchouliContent,
+      patchouliReader,
     }
   },
 })
