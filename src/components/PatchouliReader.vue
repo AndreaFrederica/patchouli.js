@@ -42,13 +42,15 @@ export default defineComponent({
   },
   data() {
     return {
+      rawElements: null as HTMLElement[] | null, //? 原始html内容 重新渲染时需要使用
       pages: [] as HTMLElement[][], // 页面的元素数组，每页元素为 HTMLElement 数组
       currentPage: 0,
       maxHeight: 600, // 单页最大高度
       readerWidth: 0,
       fontSize: 16, // 正文字体大小（默认16px）
-      headingFontSize: 24, // 各级标题的字体大小（默认24px）
+      headingFontSize: 37, // 各级标题的字体大小（默认24px）
       shadowRoot: null as ShadowRoot | null, // Shadow DOM 根元素
+      hiddenContainer: null as HTMLElement | null,
       readProgress: 0, //?阅读进度
     }
   },
@@ -73,37 +75,22 @@ export default defineComponent({
     },
     getPages(elements: HTMLElement[]): HTMLElement[][] {
       const pages: HTMLElement[][] = []
-      const hiddenContainer = document.createElement('div')
-      hiddenContainer.style.position = 'absolute'
-      hiddenContainer.style.visibility = 'hidden'
-      hiddenContainer.style.height = 'auto'
-      //! 使用MagicNumber防止溢出
-      hiddenContainer.style.width = `${this.readerWidth * 0.9}px`
-
-      this.shadowRoot?.appendChild(hiddenContainer)
-
       let currentPage: HTMLElement[] = []
-
       elements.forEach((element) => {
-        hiddenContainer.appendChild(element.cloneNode(true))
-        const elementHeight = hiddenContainer.scrollHeight
-
+        ;(this.hiddenContainer as HTMLElement).appendChild(element.cloneNode(true)) // 类型断言为 HTMLElement
+        const elementHeight = (this.hiddenContainer as HTMLElement).scrollHeight
         if (elementHeight > this.maxHeight) {
           pages.push(currentPage)
-          hiddenContainer.innerHTML = ''
-          hiddenContainer.appendChild(element.cloneNode(true))
+          this.hiddenContainer.innerHTML = ''
+          this.hiddenContainer.appendChild(element.cloneNode(true))
           currentPage = [element]
         } else {
           currentPage.push(element)
         }
       })
-
       if (currentPage.length > 0) {
         pages.push(currentPage)
       }
-
-      this.shadowRoot?.removeChild(hiddenContainer)
-
       return pages
     },
     renderPage(pageIndex: number) {
@@ -115,6 +102,8 @@ export default defineComponent({
       })
       // 更新当前页码
       // console.log(pageIndex)
+      this.readProgress = pageIndex / (this.totalPages - 1)
+      console.log('阅读进度：', this.readProgress)
       this.$emit('update:currentPage', pageIndex)
     },
     prevPage() {
@@ -130,22 +119,44 @@ export default defineComponent({
       }
     },
     adjustFontSize() {
-      // const contentContainer = this.shadowRoot?.querySelector('#content') as HTMLElement
-      // if (!contentContainer) return
-      // contentContainer.style.fontSize = `${this.fontSize}px`
-      // const headings = contentContainer.querySelectorAll('h1, h2, h3, h4, h5, h6')
-      // headings.forEach((heading) => {
-      //   heading.style.fontSize = `${this.headingFontSize}px`
-      // })
+      if (!this.shadowRoot) return
+
+      // 获取所有 div 元素并调整字体大小
+      const divElements = this.shadowRoot.querySelectorAll('div') as NodeListOf<HTMLElement>
+      divElements.forEach((div) => {
+        div.style.fontSize = `${this.fontSize}px`
+      })
+
+      // 获取并调整所有标题元素的字体大小
+      const headings = this.shadowRoot.querySelectorAll(
+        'h1, h2, h3, h4, h5, h6',
+      ) as NodeListOf<HTMLElement>
+      headings.forEach((heading) => {
+        heading.style.fontSize = `${this.headingFontSize}px`
+      })
     },
     updateFontSize(value: number) {
-      console.log(value)
+      // console.log(value)
       this.fontSize = value
       // this.adjustFontSize()
+      this.showPage(null)
     },
     updateHeadingFontSize(value: number) {
       this.headingFontSize = value
+      // this.adjustFontSize()
+      // console.log(value)
+      this.showPage(null)
+    },
+    showPage(pageIndex: number | null = null) {
       this.adjustFontSize()
+      if (pageIndex === null) {
+        this.currentPage = Math.floor(this.totalPages * this.readProgress)
+      } else {
+        this.currentPage = pageIndex
+      }
+      this.pages = this.getPages(this.rawElements as HTMLElement[])
+      console.log('发生了分页', this.pages.length)
+      this.renderPage(this.currentPage)
     },
     async loadContent() {
       try {
@@ -164,6 +175,14 @@ export default defineComponent({
           document.title = title
         }
 
+        this.hiddenContainer = document.createElement('div')
+        this.hiddenContainer.style.position = 'absolute'
+        this.hiddenContainer.style.visibility = 'hidden'
+        this.hiddenContainer.style.height = 'auto'
+        //! 使用MagicNumber防止溢出
+        this.hiddenContainer.style.width = `${this.readerWidth * 0.9}px`
+
+        this.shadowRoot.appendChild(this.hiddenContainer)
         const contentContainer = document.createElement('div')
         contentContainer.id = 'content-container'
         this.shadowRoot.appendChild(contentContainer)
@@ -188,12 +207,8 @@ export default defineComponent({
 
         const bodyContent = doc.querySelector('body')?.innerHTML || ''
         contentContainer.innerHTML = bodyContent
-
-        const allElements = this.flattenDOM(contentContainer)
-        this.pages = this.getPages(allElements)
-        this.renderPage(this.currentPage)
-
-        this.adjustFontSize()
+        this.rawElements = this.flattenDOM(contentContainer)
+        this.showPage(0) //! 显示首页
       } catch (error) {
         console.error('加载内容失败:', error)
       }
