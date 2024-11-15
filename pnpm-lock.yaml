@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      patchouli.js:
+        specifier: 'file:'
+        version: file:(typescript@5.6.3)
       pinia:
         specifier: ^2.2.6
         version: 2.2.6(typescript@5.6.3)(vue@3.5.12(typescript@5.6.3))
@@ -1518,6 +1521,9 @@ packages:
 
   parse5@7.2.1:
     resolution: {integrity: sha512-BuBYQYlv1ckiPdQi/ohiivi9Sagc9JG+Ozs0r7b/0iK3sKmrb0b9FdWdBbOdx6hBCM/F9Ir82ofnBhtZOjCRPQ==}
+
+  'patchouli.js@file:':
+    resolution: {directory: '', type: directory}
 
   path-browserify@1.0.1:
     resolution: {integrity: sha512-b7uo2UCUOYZcnF/3ID0lulOJi/bafxa1xPe7ZPsammBSpjSWQkjNxlt635YGS2MiR9GjvuXCtz2emr3jbsz98g==}
@@ -3506,6 +3512,15 @@ snapshots:
   parse5@7.2.1:
     dependencies:
       entities: 4.5.0
+
+  patchouli.js@file:(typescript@5.6.3):
+    dependencies:
+      pinia: 2.2.6(typescript@5.6.3)(vue@3.5.12(typescript@5.6.3))
+      vue: 3.5.12(typescript@5.6.3)
+      vue-router: 4.4.5(vue@3.5.12(typescript@5.6.3))
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+      - typescript
 
   path-browserify@1.0.1: {}
 

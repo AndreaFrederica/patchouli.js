@@ -1,26 +1,14 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import PatchouliReader from './components/PatchouliReader.vue'
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
-    </div>
-  </header>
-
-  <RouterView />
+  <!-- 只渲染 PatchouliReader 组件 -->
+  <PatchouliReader />
 </template>
 
 <style scoped>
+/* 保留样式或者根据需要修改 */
 header {
   line-height: 1.5;
   max-height: 100vh;
