@@ -1,46 +1,32 @@
 <template>
   <div ref="app" id="reader-app">
     <!-- 内容区域 -->
-    <div id="content-container"></div>
+    <div id="patchouli-content"></div>
 
     <!-- 浮动控件容器 -->
-    <div class="floating-controls">
-      <!-- 翻页控件 -->
-      <pagination-panel
-        :current-page="currentPage + 1"
-        :total-pages="totalPages"
-        :progress="progress"
-        @prev-page="prevPage"
-        @next-page="nextPage"
-      />
-
-      <!-- 字体大小调整控件 -->
-      <div>
-        <label for="fontSize">正文大小：</label>
-        <input type="range" id="fontSize" v-model="fontSize" min="10" max="30" step="1" />
-        <span>{{ fontSize }} px</span>
-      </div>
-      <div>
-        <label for="headingFontSize">标题大小：</label>
-        <input
-          type="range"
-          id="headingFontSize"
-          v-model="headingFontSize"
-          min="20"
-          max="40"
-          step="1"
-        />
-        <span>{{ headingFontSize }} px</span>
-      </div>
-    </div>
+    <floating-controls
+      :current-page="currentPage + 1"
+      :total-pages="totalPages"
+      :progress="progress"
+      :fontSize="fontSize"
+      :headingFontSize="headingFontSize"
+      @prev-page="prevPage"
+      @next-page="nextPage"
+      @update:fontSize="updateFontSize"
+      @update:headingFontSize="updateHeadingFontSize"
+    />
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref, onMounted } from 'vue'
+import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
   name: 'PatchouliReader',
+  components: {
+    FloatingControls, // 注册浮动控件组件
+  },
   data() {
     return {
       pages: [] as HTMLElement[][], // 页面的元素数组，每页元素为 HTMLElement 数组
@@ -110,6 +96,9 @@ export default defineComponent({
       this.pages[pageIndex].forEach((element) => {
         contentContainer.appendChild(element.cloneNode(true))
       })
+      // 更新当前页码
+      // console.log(pageIndex)
+      this.$emit('update:currentPage', pageIndex)
     },
     prevPage() {
       if (this.currentPage > 0) {
@@ -124,16 +113,21 @@ export default defineComponent({
       }
     },
     adjustFontSize() {
-      const contentContainer = this.shadowRoot?.querySelector('#content') as HTMLElement
-
-      if (!contentContainer) return
-
-      contentContainer.style.fontSize = `${this.fontSize}px`
-
+      // const contentContainer = this.shadowRoot?.querySelector('#content') as HTMLElement
+      // if (!contentContainer) return
+      // contentContainer.style.fontSize = `${this.fontSize}px`
       // const headings = contentContainer.querySelectorAll('h1, h2, h3, h4, h5, h6')
       // headings.forEach((heading) => {
       //   heading.style.fontSize = `${this.headingFontSize}px`
       // })
+    },
+    updateFontSize(value: number) {
+      this.fontSize = value
+      this.adjustFontSize()
+    },
+    updateHeadingFontSize(value: number) {
+      this.headingFontSize = value
+      this.adjustFontSize()
     },
     async loadContent() {
       try {
@@ -143,8 +137,8 @@ export default defineComponent({
         const parser = new DOMParser()
         const doc = parser.parseFromString(text, 'text/html')
 
-        const appContentContainer = this.$refs.app as HTMLElement
-        this.shadowRoot = appContentContainer.attachShadow({ mode: 'open' })
+        const patchouliContainer = document.getElementById('patchouli-content')
+        this.shadowRoot = patchouliContainer.attachShadow({ mode: 'open' })
 
         const title = doc.querySelector('title')?.innerText
         if (title) {
@@ -196,9 +190,9 @@ export default defineComponent({
     this.$nextTick(() => {
       // 通过 ref 获取 app 元素并获取它的高度
       const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
-      // this.maxHeight = appElement.offsetHeight
+      this.maxHeight = appElement.offsetHeight
       //TODO 组件高度有问题 没有正确填满外部
-      this.maxHeight = 400
+      // this.maxHeight = 400
       console.log('App height:', this.maxHeight)
       this.loadContent() // 加载外部内容
     })
@@ -208,21 +202,10 @@ export default defineComponent({
 
 <style scoped>
 /* 页面的样式 */
-html,
-body {
-  height: 100%; /* 使html和body填满浏览器窗口 */
-  margin: 0;
-}
-
 #reader-app {
   display: flex;
   flex-direction: column;
   height: 100%; /* 让 #app 占满父容器的高度 */
-}
-
-#content-container {
-  margin: 0 auto;
-  flex-grow: 1;
 }
 
 /* 浮动控件容器样式 */

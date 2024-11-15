@@ -4,14 +4,14 @@
     <!-- 翻页控件 -->
     <div class="pagination-panel">
       <div class="pagination-info">
-        <span>Page {{ currentPage + 1 }} of {{ totalPages }}</span>
+        <span>Page {{ currentPage }} of {{ totalPages }}</span>
       </div>
       <div class="progress-bar">
         <div class="progress" :style="{ width: progress + '%' }"></div>
       </div>
       <div class="page-buttons">
         <button @click="prevPage" :disabled="currentPage === 0">Previous</button>
-        <button @click="nextPage" :disabled="currentPage === totalPages - 1">Next</button>
+        <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
       </div>
     </div>
 
