@@ -1,20 +1,33 @@
 <template>
-  <div ref="app" id="reader-app">
-    <!-- 内容区域 -->
-    <div id="patchouli-content"></div>
+  <div
+    style="
+      display: flex;
+      justify-content: center;
+      min-width: 100vw;
+      min-height: 100vh;
+      width: 100vw;
+      height: 100vh;
+      align-items: center;
+    "
+  >
+    <div ref="app" id="reader-app">
+      <!-- 内容区域 -->
+      <div id="patchouli-content" ref="patchouliContent"></div>
 
-    <!-- 浮动控件容器 -->
-    <floating-controls
-      :current-page="currentPage + 1"
-      :total-pages="totalPages"
-      :progress="progress"
-      :fontSize="fontSize"
-      :headingFontSize="headingFontSize"
-      @prev-page="prevPage"
-      @next-page="nextPage"
-      @update:fontSize="updateFontSize"
-      @update:headingFontSize="updateHeadingFontSize"
-    />
+      <!-- 浮动控件容器 -->
+      <floating-controls
+        v-model="fontSize"
+        :current-page="currentPage + 1"
+        :total-pages="totalPages"
+        :progress="progress"
+        :fontSize="fontSize"
+        :headingFontSize="headingFontSize"
+        @prev-page="prevPage"
+        @next-page="nextPage"
+        @update:fontSize="updateFontSize"
+        @update:headingFontSize="updateHeadingFontSize"
+      />
+    </div>
   </div>
 </template>
 
@@ -32,9 +45,11 @@ export default defineComponent({
       pages: [] as HTMLElement[][], // 页面的元素数组，每页元素为 HTMLElement 数组
       currentPage: 0,
       maxHeight: 600, // 单页最大高度
+      readerWidth: 0,
       fontSize: 16, // 正文字体大小（默认16px）
       headingFontSize: 24, // 各级标题的字体大小（默认24px）
       shadowRoot: null as ShadowRoot | null, // Shadow DOM 根元素
+      readProgress: 0, //?阅读进度
     }
   },
   computed: {
@@ -62,6 +77,8 @@ export default defineComponent({
       hiddenContainer.style.position = 'absolute'
       hiddenContainer.style.visibility = 'hidden'
       hiddenContainer.style.height = 'auto'
+      //! 使用MagicNumber防止溢出
+      hiddenContainer.style.width = `${this.readerWidth * 0.9}px`
 
       this.shadowRoot?.appendChild(hiddenContainer)
 
@@ -122,8 +139,9 @@ export default defineComponent({
       // })
     },
     updateFontSize(value: number) {
+      console.log(value)
       this.fontSize = value
-      this.adjustFontSize()
+      // this.adjustFontSize()
     },
     updateHeadingFontSize(value: number) {
       this.headingFontSize = value
@@ -137,7 +155,8 @@ export default defineComponent({
         const parser = new DOMParser()
         const doc = parser.parseFromString(text, 'text/html')
 
-        const patchouliContainer = document.getElementById('patchouli-content')
+        // const patchouliContainer = document.getElementById('patchouli-content')
+        const patchouliContainer = this.$refs.patchouliContent as HTMLElement // 使用 ref 获取相对引用
         this.shadowRoot = patchouliContainer.attachShadow({ mode: 'open' })
 
         const title = doc.querySelector('title')?.innerText
@@ -191,9 +210,11 @@ export default defineComponent({
       // 通过 ref 获取 app 元素并获取它的高度
       const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
       this.maxHeight = appElement.offsetHeight
+      this.readerWidth = appElement.offsetWidth
       //TODO 组件高度有问题 没有正确填满外部
       // this.maxHeight = 400
       console.log('App height:', this.maxHeight)
+      console.log('App width:', this.readerWidth)
       this.loadContent() // 加载外部内容
     })
   },
@@ -203,9 +224,13 @@ export default defineComponent({
 <style scoped>
 /* 页面的样式 */
 #reader-app {
-  display: flex;
-  flex-direction: column;
-  height: 100%; /* 让 #app 占满父容器的高度 */
+  display: flex; /* 使用 flexbox 布局 */
+  flex-direction: column; /* 垂直排列子元素 */
+  height: 100%; /* 让 #reader-app 占满父容器的高度 */
+  width: 90%; /* 让 #reader-app 占满父容器的宽度 */
+
+  /* justify-content: center; 垂直居中 */
+  align-items: center; /* 水平居中 */
 }
 
 /* 浮动控件容器样式 */

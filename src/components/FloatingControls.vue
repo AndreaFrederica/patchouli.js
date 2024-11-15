@@ -1,4 +1,3 @@
-<!-- FloatingControls.vue -->
 <template>
   <div class="floating-controls">
     <!-- 翻页控件 -->
@@ -18,15 +17,26 @@
     <!-- 字体大小调整控件 -->
     <div>
       <label for="fontSize">正文大小：</label>
-      <input type="range" id="fontSize" v-model="fontSize" min="10" max="30" step="1" />
+      <input
+        type="range"
+        id="fontSize"
+        :value="fontSize"
+        @input="updateFontSize($event.target.value)"
+        min="10"
+        max="30"
+        step="1"
+      />
       <span>{{ fontSize }} px</span>
     </div>
+
+    <!-- 标题大小调整控件 -->
     <div>
       <label for="headingFontSize">标题大小：</label>
       <input
         type="range"
         id="headingFontSize"
-        v-model="headingFontSize"
+        :value="headingFontSize"
+        @input="updateHeadingFontSize($event.target.value)"
         min="20"
         max="40"
         step="1"
@@ -72,10 +82,10 @@ export default defineComponent({
       this.$emit('next-page')
     },
     updateFontSize(value: number) {
-      this.$emit('update:fontSize', value)
+      this.$emit('update:fontSize', Number(value))
     },
     updateHeadingFontSize(value: number) {
-      this.$emit('update:headingFontSize', value)
+      this.$emit('update:headingFontSize', Number(value))
     },
   },
 })
