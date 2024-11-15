@@ -32,7 +32,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onBeforeMount } from 'vue'
+import { defineComponent, onMounted, onBeforeMount } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
@@ -62,7 +62,21 @@ export default defineComponent({
       return ((this.currentPage + 1) / this.totalPages) * 100
     },
   },
-  setup() {},
+  mounted() {
+    // 在 mounted 中执行需要的操作
+    const appElement = this.$refs.app as HTMLDivElement
+    this.maxHeight = appElement.offsetHeight
+    this.readerWidth = appElement.offsetWidth
+    console.log('App height:', this.maxHeight)
+    console.log('App width:', this.readerWidth)
+    this.loadContent() // 加载外部内容
+  },
+  beforeMount() {
+    window.addEventListener('resize', this.handleResize)
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize)
+  },
   methods: {
     // 监听窗口大小变化的函数
     handleResize() {
@@ -231,29 +245,29 @@ export default defineComponent({
       }
     },
   },
-  mounted() {
-    // onMounted(() => {
+  // mounted() {
+  //   this.$nextTick(() => {
+  //     // 通过 ref 获取 app 元素并获取它的高度
+  //     const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
+  //     this.maxHeight = appElement.offsetHeight
+  //     this.readerWidth = appElement.offsetWidth
+  //     //TODO 组件高度有问题 没有正确填满外部
+  //     // this.maxHeight = 400
+  //     console.log('App height:', this.maxHeight)
+  //     console.log('App width:', this.readerWidth)
+  //     this.loadContent() // 加载外部内容
+  //   })
+  //   window.addEventListener('resize', this.handleResize)
+  //   onBeforeMount(() => {
+  //     window.removeEventListener('resize', this.handleResize)
+  //   })
+  // },
+      // onMounted(() => {
     //   const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
     //   this.maxHeight = appElement.offsetHeight
     //   console.log('App height:', this.maxHeight)
     //   this.loadContent()
     // })
-    this.$nextTick(() => {
-      // 通过 ref 获取 app 元素并获取它的高度
-      const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
-      this.maxHeight = appElement.offsetHeight
-      this.readerWidth = appElement.offsetWidth
-      //TODO 组件高度有问题 没有正确填满外部
-      // this.maxHeight = 400
-      console.log('App height:', this.maxHeight)
-      console.log('App width:', this.readerWidth)
-      this.loadContent() // 加载外部内容
-    })
-    window.addEventListener('resize', this.handleResize)
-    onBeforeMount(() => {
-      window.removeEventListener('resize', this.handleResize)
-    })
-  },
 })
 </script>
 
