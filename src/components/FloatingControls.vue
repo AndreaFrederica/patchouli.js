@@ -74,6 +74,7 @@ const nextPage = ()=>{
 </script>
 
 <style scoped>
+/* 浮动控件容器样式 */
 .floating-controls {
   position: fixed;
   bottom: 20px;
@@ -86,6 +87,7 @@ const nextPage = ()=>{
   width: 250px;
 }
 
+/* 翻页控件样式 */
 .pagination-panel {
   margin-bottom: 15px;
 }
@@ -107,6 +109,7 @@ const nextPage = ()=>{
   height: 100%;
   background-color: #4caf50;
   border-radius: 3px;
+  /* 初始进度为 0 */
   transition: width 0.3s;
 }
 

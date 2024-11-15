@@ -32,7 +32,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeMount } from 'vue'
+import { defineComponent } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
@@ -245,29 +245,6 @@ export default defineComponent({
       }
     },
   },
-  // mounted() {
-  //   this.$nextTick(() => {
-  //     // 通过 ref 获取 app 元素并获取它的高度
-  //     const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
-  //     this.maxHeight = appElement.offsetHeight
-  //     this.readerWidth = appElement.offsetWidth
-  //     //TODO 组件高度有问题 没有正确填满外部
-  //     // this.maxHeight = 400
-  //     console.log('App height:', this.maxHeight)
-  //     console.log('App width:', this.readerWidth)
-  //     this.loadContent() // 加载外部内容
-  //   })
-  //   window.addEventListener('resize', this.handleResize)
-  //   onBeforeMount(() => {
-  //     window.removeEventListener('resize', this.handleResize)
-  //   })
-  // },
-      // onMounted(() => {
-    //   const appElement = this.$refs.app as HTMLDivElement // 断言为 HTMLDivElement
-    //   this.maxHeight = appElement.offsetHeight
-    //   console.log('App height:', this.maxHeight)
-    //   this.loadContent()
-    // })
 })
 </script>
 
@@ -283,52 +260,5 @@ export default defineComponent({
   align-items: center; /* 水平居中 */
 }
 
-/* 浮动控件容器样式 */
-.floating-controls {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  width: 250px;
-}
 
-/* 翻页控件样式 */
-.pagination-panel {
-  margin-bottom: 15px;
-}
-
-.pagination-info {
-  font-size: 14px;
-  margin-bottom: 5px;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 5px;
-  background-color: #f0f0f0;
-  border-radius: 3px;
-  margin-bottom: 10px;
-}
-
-.progress {
-  height: 100%;
-  background-color: #4caf50;
-  border-radius: 3px;
-  /* 初始进度为 0 */
-  transition: width 0.3s;
-}
-
-.page-buttons button {
-  padding: 5px 10px;
-  margin: 0 5px;
-  font-size: 14px;
-  background-color: #4caf50;
-  color: white;
-  border: none;
-  border-radius: 3px;
-}
 </style>
