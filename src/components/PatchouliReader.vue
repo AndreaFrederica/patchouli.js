@@ -10,7 +10,7 @@
       align-items: center;
     "
   >
-    <div ref="app" id="reader-app">
+    <div id="patchouli-reader" ref="patchouliReader">
       <!-- 内容区域 -->
       <div id="patchouli-content" ref="patchouliContent"></div>
 
@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeUnmount, ref, computed } from 'vue'
+import { defineComponent, onMounted, onBeforeUnmount, ref, computed, nextTick } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
@@ -51,13 +51,20 @@ export default defineComponent({
     const hiddenContainer = ref<HTMLElement | null>(null)
     const readProgress = ref(0) // 阅读进度
     const patchouliContent = ref<HTMLElement | null>(null)
+    const patchouliReader = ref<HTMLElement | null>(null)
 
     const totalPages = computed(() => pages.value.length)
     const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100)
 
     const handleResize = () => {
-      readerWidth.value = window.innerWidth
-      maxHeight.value = window.innerHeight
+      // readerWidth.value = patchouliReader.value?.offsetWidth
+      // maxHeight.value = patchouliReader.value?.offsetHeight
+      //TODO 更改成vue风格
+      const readerApp = document.getElementById('patchouli-reader') as HTMLElement
+      if (readerApp) {
+        readerWidth.value = readerApp.offsetWidth
+        maxHeight.value = readerApp.offsetHeight
+      }
       showPage() // 页面重新布局
     }
 
@@ -154,15 +161,15 @@ export default defineComponent({
       adjustFontSize()
       pages.value = getPages(rawElements.value as HTMLElement[])
       if (pageIndex === null) {
-        const temp =Math.floor(totalPages.value * readProgress.value)
+        const temp = Math.floor(totalPages.value * readProgress.value)
         // console.log("will to",temp,"max",totalPages.value)
-        if(temp >= (totalPages.value - 1)){
+        if (temp >= totalPages.value - 1) {
           // console.log("too high")
-          currentPage.value = (totalPages.value - 1)
-        } else if(temp < 0){
+          currentPage.value = totalPages.value - 1
+        } else if (temp < 0) {
           currentPage.value = 0
-        }else{
-        currentPage.value = temp
+        } else {
+          currentPage.value = temp
         }
       } else {
         currentPage.value = pageIndex
@@ -228,10 +235,20 @@ export default defineComponent({
 
     // 生命周期钩子
     onMounted(() => {
-      readerWidth.value = window.innerWidth
-      maxHeight.value = window.innerHeight
-      loadContent()
-      window.addEventListener('resize', handleResize)
+      nextTick(() => {
+        // // 等待 Vue 完成 DOM 更新后获取元素的尺寸
+        // readerWidth.value = patchouliReader.value.offsetWidth
+        // maxHeight.value = patchouliReader.value.offsetHeight
+        //TODO 更改成vue风格
+        const readerApp = document.getElementById('patchouli-reader') as HTMLElement
+        if (readerApp) {
+          readerWidth.value = readerApp.offsetWidth
+          maxHeight.value = readerApp.offsetHeight
+        }
+        // console.log('width', readerWidth.value, 'height', maxHeight.value)
+        loadContent()
+        window.addEventListener('resize', handleResize)
+      })
     })
 
     onBeforeUnmount(() => {
@@ -258,7 +275,7 @@ export default defineComponent({
 
 <style scoped>
 /* 页面的样式 */
-#reader-app {
+#patchouli-reader {
   display: flex; /* 使用 flexbox 布局 */
   flex-direction: column; /* 垂直排列子元素 */
   height: 100%; /* 让 #reader-app 占满父容器的高度 */
