@@ -131,20 +131,27 @@ export default defineComponent({
     adjustFontSize() {
       if (!this.shadowRoot) return
 
-      // 获取所有 div 元素并调整字体大小
-      const divElements = this.shadowRoot.querySelectorAll('div') as NodeListOf<HTMLElement>
-      divElements.forEach((div) => {
-        // 调整正文的字体大小
-        div.style.fontSize = `${this.fontSize}px`
+      // 查找已注入的样式
+      let style = this.shadowRoot.querySelector('.font-size-styles')
 
-        // 获取并调整该 div 内部的标题元素的字体大小
-        const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6') as NodeListOf<HTMLElement>
-        headings.forEach((heading) => {
-          console.log(this.headingFontSize)
-          heading.style.fontSize = `${this.headingFontSize}px`
-        })
-      })
+      if (!style) {
+        // 如果样式没有注入，则创建并注入样式
+        style = document.createElement('style')
+        style.className = 'font-size-styles' // 给样式添加一个唯一的 class
+        this.shadowRoot.appendChild(style)
+      }
+
+      // 更新样式内容
+      style.textContent = `
+    div {
+      font-size: ${this.fontSize}px !important;
+    }
+    div h1, div h2, div h3, div h4, div h5, div h6 {
+      font-size: ${this.headingFontSize}px !important;
+    }
+  `
     },
+
     updateFontSize(value: number) {
       // console.log(value)
       this.fontSize = value
