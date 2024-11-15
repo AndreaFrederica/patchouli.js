@@ -32,7 +32,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, onBeforeMount } from 'vue'
+import { defineComponent, onBeforeMount } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
@@ -90,8 +90,8 @@ export default defineComponent({
         const elementHeight = (this.hiddenContainer as HTMLElement).scrollHeight
         if (elementHeight > this.maxHeight) {
           pages.push(currentPage)
-          this.hiddenContainer.innerHTML = ''
-          this.hiddenContainer.appendChild(element.cloneNode(true))
+          ;(this.hiddenContainer as HTMLElement).innerHTML = ''
+          ;(this.hiddenContainer as HTMLElement).appendChild(element.cloneNode(true))
           currentPage = [element]
         } else {
           currentPage.push(element)
@@ -99,7 +99,7 @@ export default defineComponent({
       })
       if (currentPage.length > 0) {
         pages.push(currentPage)
-        this.hiddenContainer.innerHTML = ''
+        ;(this.hiddenContainer as HTMLElement).innerHTML = ''
       }
       return pages
     },
