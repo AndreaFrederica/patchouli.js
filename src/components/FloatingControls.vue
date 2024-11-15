@@ -1,7 +1,12 @@
 <template>
-  <div class="floating-controls">
+  <div class="floating-controls" :class="{ collapsed: isCollapsed }">
+    <!-- 折叠按钮 -->
+    <button class="toggle-btn" @click="toggleCollapse">
+      {{ isCollapsed ? 'Expand' : 'Collapse' }}
+    </button>
+
     <!-- 翻页控件 -->
-    <div class="pagination-panel">
+    <div class="pagination-panel" v-if="!isCollapsed">
       <div class="pagination-info">
         <span>Page {{ currentPage }} of {{ totalPages }}</span>
       </div>
@@ -14,8 +19,8 @@
       </div>
     </div>
 
-    <div class="font-panel">
-      <!-- 字体大小调整控件 -->
+    <!-- 字体大小调整控件 -->
+    <div class="font-panel" v-if="!isCollapsed">
       <div class="size-bar">
         <label for="fontSize">正文大小：</label>
         <input type="range" id="fontSize" v-model.number="fontSize" min="10" max="30" step="1" />
@@ -39,10 +44,11 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { type Ref } from 'vue'
 
-const emit = defineEmits(['prev-page', 'next-page'])
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const emit = defineEmits(['prev-page', 'next-page']);
 defineProps({
   currentPage: {
     type: Number,
@@ -56,60 +62,74 @@ defineProps({
     type: Number,
     required: true,
   },
-})
-const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true })
-const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true })
+});
+
+const headingFontSize = ref<number>(20);
+const fontSize = ref<number>(14);
+const isCollapsed = ref<boolean>(false); // 控制折叠状态
 
 const prevPage = () => {
-  emit('prev-page')
-}
+  emit('prev-page');
+};
+
 const nextPage = () => {
-  emit('next-page')
-}
+  emit('next-page');
+};
+
+const toggleCollapse = () => {
+  isCollapsed.value = !isCollapsed.value; // 切换折叠状态
+};
 </script>
+
 
 <style scoped>
 /*TODO 没居中*/
 .floating-controls {
   position: fixed;
-  top: 50%; /* 垂直居中 */
-  left: 50%; /* 水平居中 */
-  transform: translate(-50%, 20%); /* 将元素移动回居中的位置 */
+  bottom: 20px;
+  right: 20px;
+  /* transform: translate(20px, 20px); */
   background-color: rgba(255, 255, 255, 0.9);
   border-radius: 8px;
-  padding: 10px; /* 压缩内边距 */
+  padding: 10px;
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
   z-index: 1000;
-  display: flex; /* 使用 flex 布局 */
-  flex-direction: row; /* 横排 */
-  align-items: flex-start; /* 垂直顶部对齐 */
-  gap: 15px; /* 控件之间的水平间距 */
-  width: auto; /* 压缩组件宽度 */
-  height: auto; /* 自动适应高度 */
-}
-
-/* 翻页控件样式 */
-.pagination-panel {
   display: flex;
-  flex-direction: column; /* 翻页控件内部保持竖排 */
-  align-items: center;
-  margin-bottom: 0;
+  flex-direction: column;
+  gap: 15px;
+  width: auto;
+  height: auto;
+  transition: transform 0.3s ease; /* 添加动画效果 */
 }
 
-/* 字体调整面板 */
-.font-panel {
+.floating-controls.collapsed {
+  /* transform: translate(1600%, 900%);折叠时移到右边 */
+  bottom: 20px;
+  right: 80px;
+}
+
+.toggle-btn {
+  position: absolute;
+  top: 10px;
+  /* left: 50%; */
+  transform: translateX(0%);
+  transform: translateY(-100%);
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 5%;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.pagination-panel, .font-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 0;
-  height: 100%; /* 确保有足够的空间进行居中 */
-  flex-grow: 1; /* 使 font-panel 填充剩余空间 */
 }
 
-
 .pagination-info {
-  font-size: 12px; /* 压缩字体大小 */
+  font-size: 12px;
   margin-bottom: 5px;
 }
 
@@ -118,7 +138,7 @@ const nextPage = () => {
   height: 5px;
   background-color: #f0f0f0;
   border-radius: 3px;
-  margin-bottom: 5px; /* 压缩进度条下的间距 */
+  margin-bottom: 5px;
 }
 
 .progress {
@@ -137,4 +157,15 @@ const nextPage = () => {
   border: none;
   border-radius: 3px;
 }
+
+.size-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.size-bar input {
+  margin: 0 10px;
+}
 </style>
+
