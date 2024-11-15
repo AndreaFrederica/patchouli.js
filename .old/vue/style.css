@@ -1,0 +1,67 @@
+/* 页面的样式 */
+/* style.css */
+html, body {
+    height: 100%;  /* 使html和body填满浏览器窗口 */
+    margin: 0;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;  /* 让 #app 占满父容器的高度 */
+}
+
+#content {
+    margin: 0 auto;
+}
+
+/* 浮动控件容器样式 */
+.floating-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    width: 250px;
+}
+
+/* 翻页控件样式 */
+.pagination-panel {
+    margin-bottom: 15px;
+}
+
+.pagination-info {
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 5px;
+    background-color: #f0f0f0;
+    border-radius: 3px;
+    margin-bottom: 10px;
+}
+
+.progress {
+    height: 100%;
+    background-color: #4caf50;
+    border-radius: 3px;
+    /* 初始进度为 0 */
+    transition: width 0.3s;
+
+
+}
+
+.page-buttons button {
+    padding: 5px 10px;
+    margin: 0 5px;
+    font-size: 14px;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 3px;
+}

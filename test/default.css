@@ -1,0 +1,19 @@
+p {
+  text-indent: 2em;
+}
+
+h1 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 3em; /* 设置字号为3倍 */
+  height: 97vh; /* 使标题占满整个视口高度 */
+  margin: 0; /* 去掉默认的外边距 */
+}
+
+h2,
+h3 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
