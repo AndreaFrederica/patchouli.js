@@ -20,7 +20,7 @@
       <input
         type="range"
         id="fontSize"
-        v-model="fontSize"
+        v-model.number="fontSize"
         min="10"
         max="30"
         step="1"
@@ -34,7 +34,7 @@
       <input
         type="range"
         id="headingFontSize"
-        v-model="headingFontSize"
+        v-model.number="headingFontSize"
         min="20"
         max="40"
         step="1"
