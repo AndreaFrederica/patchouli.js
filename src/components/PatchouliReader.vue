@@ -32,7 +32,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, onBeforeMount } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
 
 export default defineComponent({
@@ -48,7 +48,7 @@ export default defineComponent({
       maxHeight: 600, // 单页最大高度
       readerWidth: 0,
       fontSize: 16, // 正文字体大小（默认16px）
-      headingFontSize: 37, // 各级标题的字体大小（默认24px）
+      headingFontSize: 24, // 各级标题的字体大小（默认24px）
       shadowRoot: null as ShadowRoot | null, // Shadow DOM 根元素
       hiddenContainer: null as HTMLElement | null,
       readProgress: 0, //?阅读进度
@@ -62,7 +62,16 @@ export default defineComponent({
       return ((this.currentPage + 1) / this.totalPages) * 100
     },
   },
+  setup() {},
   methods: {
+    // 监听窗口大小变化的函数
+    handleResize() {
+      this.readerWidth = window.innerWidth
+      this.maxHeight = window.innerHeight
+      // 在这里调用你需要执行的逻辑
+      // console.log('窗口大小变化:', this.readerWidth, this.maxHeight)
+      this.showPage()
+    },
     flattenDOM(node: Node): HTMLElement[] {
       let elements: HTMLElement[] = []
       node.childNodes.forEach((child) => {
@@ -90,6 +99,7 @@ export default defineComponent({
       })
       if (currentPage.length > 0) {
         pages.push(currentPage)
+        this.hiddenContainer.innerHTML = ''
       }
       return pages
     },
@@ -103,7 +113,7 @@ export default defineComponent({
       // 更新当前页码
       // console.log(pageIndex)
       this.readProgress = pageIndex / (this.totalPages - 1)
-      console.log('阅读进度：', this.readProgress)
+      // console.log('阅读进度：', this.readProgress)
       this.$emit('update:currentPage', pageIndex)
     },
     prevPage() {
@@ -124,15 +134,15 @@ export default defineComponent({
       // 获取所有 div 元素并调整字体大小
       const divElements = this.shadowRoot.querySelectorAll('div') as NodeListOf<HTMLElement>
       divElements.forEach((div) => {
+        // 调整正文的字体大小
         div.style.fontSize = `${this.fontSize}px`
-      })
 
-      // 获取并调整所有标题元素的字体大小
-      const headings = this.shadowRoot.querySelectorAll(
-        'h1, h2, h3, h4, h5, h6',
-      ) as NodeListOf<HTMLElement>
-      headings.forEach((heading) => {
-        heading.style.fontSize = `${this.headingFontSize}px`
+        // 获取并调整该 div 内部的标题元素的字体大小
+        const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6') as NodeListOf<HTMLElement>
+        headings.forEach((heading) => {
+          console.log(this.headingFontSize)
+          heading.style.fontSize = `${this.headingFontSize}px`
+        })
       })
     },
     updateFontSize(value: number) {
@@ -155,7 +165,7 @@ export default defineComponent({
         this.currentPage = pageIndex
       }
       this.pages = this.getPages(this.rawElements as HTMLElement[])
-      console.log('发生了分页', this.pages.length)
+      // console.log('发生了分页', this.pages.length)
       this.renderPage(this.currentPage)
     },
     async loadContent() {
@@ -231,6 +241,10 @@ export default defineComponent({
       console.log('App height:', this.maxHeight)
       console.log('App width:', this.readerWidth)
       this.loadContent() // 加载外部内容
+    })
+    window.addEventListener('resize', this.handleResize)
+    onBeforeMount(() => {
+      window.removeEventListener('resize', this.handleResize)
     })
   },
 })
