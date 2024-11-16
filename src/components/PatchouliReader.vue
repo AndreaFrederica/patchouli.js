@@ -9,26 +9,25 @@
       height: 100vh;
       align-items: center;
     "
+    @click="handleClick"
+    @touchstart="handleTouchStart"
+    @touchend="handleTouchEnd"
   >
-    <div
-      @click="handleClick"
-      @touchstart="handleTouchStart"
-      @touchend="handleTouchEnd"
-      id="patchouli-reader"
-      ref="patchouliReader"
-    >
+    <div id="patchouli-reader" ref="patchouliReader">
       <!-- 内容区域 -->
       <div id="patchouli-content" ref="patchouliContent"></div>
 
       <!-- 浮动控件容器 -->
       <floating-controls
-        v-model:fontSize="fontSize"
+        :onReaderClick="onReaderClick"
         :current-page="currentPage + 1"
         :total-pages="totalPages"
         :progress="progress"
-        :headingFontSize="headingFontSize"
+        v-model:fontSize="fontSize"
+        v-model:headingFontSize="headingFontSize"
         @prev-page="prevPage"
         @next-page="nextPage"
+        @end-on-reader-click="endOnReaderClick"
       />
     </div>
   </div>
@@ -52,17 +51,68 @@ const patchouliContent = ref<HTMLElement>();
 const readerContainer = ref<HTMLElement>();
 const patchouliReader = ref<HTMLElement>();
 
+const touchStartX = ref(0);
+const touchEndX = ref(0);
+
 const totalPages = computed(() => pages.value.length);
 const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100);
+
+const onReaderClick = ref(0);
 
 const handleResize = () => {
   if (patchouliReader.value) {
     readerWidth.value = patchouliReader.value.offsetWidth;
     maxHeight.value = patchouliReader.value.offsetHeight;
   }
-  showPage(); // 页面重新布局
 };
 
+const endOnReaderClick = () => {
+  onReaderClick.value = 0;
+  // 清弹出状态栏的中断
+};
+
+// 点击翻页处理函数
+const handleClick = (event: MouseEvent) => {
+  const clickX = event.clientX;
+  const screenWidth = window.innerWidth;
+  const edgeWidth = screenWidth * 0.4; // 边缘区域为 20%
+
+  // 仅在左右边缘20%点击才触发翻页
+  if (clickX < edgeWidth) {
+    prevPage(); // 点击左侧20%区域
+  } else if (clickX > screenWidth - edgeWidth) {
+    nextPage(); // 点击右侧20%区域
+  } else {
+    // console.log('11111');
+    onReaderClick.value = 1;
+  }
+};
+
+// 触摸滑动开始处理函数（全屏检测）
+const handleTouchStart = (event: TouchEvent) => {
+  touchStartX.value = event.touches[0].clientX;
+};
+
+// 触摸滑动结束处理函数（全屏检测）
+const handleTouchEnd = (event: TouchEvent) => {
+  touchEndX.value = event.changedTouches[0].clientX;
+  handleSwipe();
+};
+
+// 滑动处理函数（全屏范围内检测滑动）
+const handleSwipe = () => {
+  if (touchStartX.value === null || touchEndX.value === null) return;
+
+  const swipeDistance = touchEndX.value - touchStartX.value;
+  // 设置滑动的阈值，避免误触
+  const swipeThreshold = 50;
+
+  if (swipeDistance > swipeThreshold) {
+    prevPage(); // 右滑（向右滑动）
+  } else if (swipeDistance < -swipeThreshold) {
+    nextPage(); // 左滑（向左滑动）
+  }
+};
 const flattenDOM = (node: Node): HTMLElement[] => {
   let elements: HTMLElement[] = [];
   node.childNodes.forEach((child) => {
@@ -74,9 +124,10 @@ const flattenDOM = (node: Node): HTMLElement[] => {
   return elements;
 };
 
-const getPages = (elements: HTMLElement[]): HTMLElement[][] => {
+const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   const pages: HTMLElement[][] = [];
   let currentPage: HTMLElement[] = [];
+  if (elements === undefined) return pages;
   elements.forEach((element) => {
     (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true)); // 类型断言为 HTMLElement
     const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
@@ -99,7 +150,10 @@ const getPages = (elements: HTMLElement[]): HTMLElement[][] => {
 const renderPage = (pageIndex: number) => {
   const contentContainer = shadowRoot.value?.querySelector('#content-container') as HTMLElement;
   contentContainer.innerHTML = '';
-  pages.value[pageIndex].forEach((element) => {
+  if (pages.value === undefined) return;
+  const subPage = pages.value[pageIndex];
+  if (subPage === undefined) return;
+  subPage.forEach((element) => {
     contentContainer.appendChild(element.cloneNode(true));
   });
   readProgress.value = pageIndex / (totalPages.value - 1);
@@ -142,7 +196,7 @@ const adjustFontSize = () => {
   `;
 };
 
-watch([fontSize, headingFontSize], () => {
+watch([fontSize, headingFontSize, maxHeight, readerWidth], () => {
   showPage(); // 页面更新
 });
 
@@ -172,33 +226,32 @@ const showPage = (pageIndex?: number) => {
   renderPage(currentPage.value);
 };
 
+const initReader = () => {
+  if (patchouliContent.value === undefined) return;
+  shadowRoot.value = patchouliContent.value.attachShadow({ mode: 'open' });
+  hiddenContainer.value = document.createElement('div');
+  hiddenContainer.value.style.position = 'absolute';
+  hiddenContainer.value.style.visibility = 'hidden';
+  hiddenContainer.value.style.height = 'auto';
+  hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
+
+  shadowRoot.value.appendChild(hiddenContainer.value);
+  readerContainer.value = document.createElement('div');
+  readerContainer.value.id = 'content-container';
+  readerContainer.value.style.width = `${readerWidth.value}px`;
+  shadowRoot.value.appendChild(readerContainer.value);
+};
+
 const loadContent = async () => {
   try {
     const response = await fetch('content.html');
     const text = await response.text();
-
     const parser = new DOMParser();
     const doc = parser.parseFromString(text, 'text/html');
-
-    if (patchouliContent.value === undefined) return;
-    shadowRoot.value = patchouliContent.value.attachShadow({ mode: 'open' });
-
     const title = doc.querySelector('title')?.innerText;
     if (title) {
       document.title = title;
     }
-
-    hiddenContainer.value = document.createElement('div');
-    hiddenContainer.value.style.position = 'absolute';
-    hiddenContainer.value.style.visibility = 'hidden';
-    hiddenContainer.value.style.height = 'auto';
-    hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
-
-    shadowRoot.value.appendChild(hiddenContainer.value);
-    readerContainer.value = document.createElement('div');
-    readerContainer.value.id = 'content-container';
-    readerContainer.value.style.width = `${readerWidth.value}px`;
-    shadowRoot.value.appendChild(readerContainer.value);
 
     const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
     linkTags.forEach((link) => {
@@ -217,7 +270,7 @@ const loadContent = async () => {
       styleElement.innerHTML = style.innerHTML;
       shadowRoot.value?.appendChild(styleElement);
     });
-
+    if (readerContainer.value === undefined) return;
     const bodyContent = doc.querySelector('body')?.innerHTML || '';
     readerContainer.value.innerHTML = bodyContent;
     rawElements.value = flattenDOM(readerContainer.value);
@@ -229,20 +282,14 @@ const loadContent = async () => {
 
 // 生命周期钩子
 onMounted(() => {
+  initReader(); //! 初始化未受vue托管的dom树
+  loadContent();
   nextTick(() => {
     // 等待 Vue 完成 DOM 更新后获取元素的尺寸
     if (patchouliReader.value) {
       readerWidth.value = patchouliReader.value.offsetWidth;
       maxHeight.value = patchouliReader.value.offsetHeight;
     }
-    //TODO 更改成vue风格
-    // const readerApp = document.getElementById('patchouli-reader') as HTMLElement
-    // if (readerApp) {
-    //   readerWidth.value = readerApp.offsetWidth
-    //   maxHeight.value = readerApp.offsetHeight
-    // }
-    // console.log('width', readerWidth.value, 'height', maxHeight.value)
-    loadContent();
     window.addEventListener('resize', handleResize);
   });
 });

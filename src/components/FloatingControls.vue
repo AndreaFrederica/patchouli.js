@@ -1,7 +1,7 @@
 <template>
   <div class="floating-controls" :class="{ collapsed: isCollapsed }">
     <!-- 折叠按钮 -->
-    <button class="toggle-btn" @click="toggleCollapse">
+    <button class="toggle-btn" @click.stop="toggleCollapse">
       {{ isCollapsed ? 'Expand' : 'Collapse' }}
     </button>
 
@@ -14,8 +14,8 @@
         <div class="progress" :style="{ width: progress + '%' }"></div>
       </div>
       <div class="page-buttons">
-        <button @click="prevPage" :disabled="currentPage === 0">Previous</button>
-        <button @click="nextPage" :disabled="currentPage === totalPages">Next</button>
+        <button @click.stop="prevPage" :disabled="currentPage === 0">Previous</button>
+        <button @click.stop="nextPage" :disabled="currentPage === totalPages">Next</button>
       </div>
     </div>
 
@@ -45,10 +45,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 
-const emit = defineEmits(['prev-page', 'next-page']);
-defineProps({
+const emit = defineEmits(['prev-page', 'next-page', 'end-on-reader-click']);
+const props = defineProps({
   currentPage: {
     type: Number,
     required: true,
@@ -61,12 +61,27 @@ defineProps({
     type: Number,
     required: true,
   },
+  onReaderClick: {
+    type: Number,
+    required: true,
+  }, // 处理reader窗体中间被点击 需要弹出状态栏 如果number = 1 则为事件产生 处理完后请手动置为 0
 });
 
 const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true });
 const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true });
 const isCollapsed = ref<boolean>(false); // 控制折叠状态
 
+watch(
+  () => props.onReaderClick,
+  (newValue) => {
+    if (newValue === 1) {
+      // console.log('弹出状态栏');
+      emit('end-on-reader-click');
+      // 可以在这里触发 UI 弹出逻辑，如显示某个弹窗
+      toggleCollapse();
+    }
+  },
+);
 const prevPage = () => {
   emit('prev-page');
 };
