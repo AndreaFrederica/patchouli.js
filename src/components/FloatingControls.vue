@@ -45,9 +45,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref } from 'vue'
+import { ref, type Ref } from 'vue';
 
-const emit = defineEmits(['prev-page', 'next-page'])
+const emit = defineEmits(['prev-page', 'next-page']);
 defineProps({
   currentPage: {
     type: Number,
@@ -61,23 +61,23 @@ defineProps({
     type: Number,
     required: true,
   },
-})
+});
 
-const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true })
-const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true })
-const isCollapsed = ref<boolean>(false) // 控制折叠状态
+const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true });
+const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true });
+const isCollapsed = ref<boolean>(false); // 控制折叠状态
 
 const prevPage = () => {
-  emit('prev-page')
-}
+  emit('prev-page');
+};
 
 const nextPage = () => {
-  emit('next-page')
-}
+  emit('next-page');
+};
 
 const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value // 切换折叠状态
-}
+  isCollapsed.value = !isCollapsed.value; // 切换折叠状态
+};
 </script>
 
 <style scoped>
