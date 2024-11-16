@@ -23,16 +23,14 @@
         :headingFontSize="headingFontSize"
         @prev-page="prevPage"
         @next-page="nextPage"
-        @update:fontSize="updateFontSize"
-        @update:headingFontSize="updateHeadingFontSize"
       />
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onBeforeUnmount, ref, computed, nextTick } from 'vue'
-import FloatingControls from '@/components/FloatingControls.vue'
+import { defineComponent, onMounted, onBeforeUnmount, ref, computed, nextTick } from 'vue';
+import FloatingControls from '@/components/FloatingControls.vue';
 
 export default defineComponent({
   name: 'PatchouliReader',
@@ -40,102 +38,97 @@ export default defineComponent({
     FloatingControls, // 注册浮动控件组件
   },
   setup() {
-    const rawElements = ref<HTMLElement[] | null>(null) // 原始html内容
-    const pages = ref<HTMLElement[][]>([]) // 页面的元素数组，每页元素为 HTMLElement 数组
-    const currentPage = ref(0)
-    const maxHeight = ref(600) // 单页最大高度
-    const readerWidth = ref(0)
-    const fontSize = ref(16) // 正文字体大小（默认16px）
-    const headingFontSize = ref(24) // 各级标题的字体大小（默认24px）
-    const shadowRoot = ref<ShadowRoot | null>(null) // Shadow DOM 根元素
-    const hiddenContainer = ref<HTMLElement | null>(null)
-    const readProgress = ref(0) // 阅读进度
-    const patchouliContent = ref<HTMLElement | null>(null)
-    const patchouliReader = ref<HTMLElement | null>(null)
+    const rawElements = ref<HTMLElement[]>(); // 原始html内容
+    const pages = ref<HTMLElement[][]>([]); // 页面的元素数组，每页元素为 HTMLElement 数组
+    const currentPage = ref(0);
+    const maxHeight = ref(600); // 单页最大高度
+    const readerWidth = ref(0);
+    const fontSize = ref(16); // 正文字体大小（默认16px）
+    const headingFontSize = ref(24); // 各级标题的字体大小（默认24px）
+    const shadowRoot = ref<ShadowRoot>(); // Shadow DOM 根元素
+    const hiddenContainer = ref<HTMLElement>();
+    const readProgress = ref(0); // 阅读进度
+    const patchouliContent = ref<HTMLElement>();
+    const readerContainer = ref<HTMLElement>();
+    const patchouliReader = ref<HTMLElement>();
 
-    const totalPages = computed(() => pages.value.length)
-    const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100)
+    const totalPages = computed(() => pages.value.length);
+    const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100);
 
     const handleResize = () => {
       if (patchouliReader.value) {
-        readerWidth.value = patchouliReader.value.offsetWidth
-        maxHeight.value = patchouliReader.value.offsetHeight
+        readerWidth.value = patchouliReader.value.offsetWidth;
+        maxHeight.value = patchouliReader.value.offsetHeight;
       }
-      //TODO 更改成vue风格
-      // const readerApp = document.getElementById('patchouli-reader') as HTMLElement
-      // if (readerApp) {
-      //   readerWidth.value = readerApp.offsetWidth
-      //   maxHeight.value = readerApp.offsetHeight
-      // }
-      showPage() // 页面重新布局
-    }
+      showPage(); // 页面重新布局
+    };
 
     const flattenDOM = (node: Node): HTMLElement[] => {
-      let elements: HTMLElement[] = []
+      let elements: HTMLElement[] = [];
       node.childNodes.forEach((child) => {
         if (child.nodeType === Node.ELEMENT_NODE) {
-          elements.push(child as HTMLElement)
-          elements = elements.concat(flattenDOM(child))
+          elements.push(child as HTMLElement);
+          elements = elements.concat(flattenDOM(child));
         }
-      })
-      return elements
-    }
+      });
+      return elements;
+    };
 
     const getPages = (elements: HTMLElement[]): HTMLElement[][] => {
-      const pages: HTMLElement[][] = []
-      let currentPage: HTMLElement[] = []
+      const pages: HTMLElement[][] = [];
+      let currentPage: HTMLElement[] = [];
       elements.forEach((element) => {
-        ;(hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true)) // 类型断言为 HTMLElement
-        const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight
+        (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true)); // 类型断言为 HTMLElement
+        const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
         if (elementHeight > maxHeight.value) {
-          pages.push(currentPage)
-          ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-          ;(hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true))
-          currentPage = [element]
+          pages.push(currentPage);
+          (hiddenContainer.value as HTMLElement).innerHTML = '';
+          (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+          currentPage = [element];
         } else {
-          currentPage.push(element)
+          currentPage.push(element);
         }
-      })
+      });
       if (currentPage.length > 0) {
-        pages.push(currentPage)
-        ;(hiddenContainer.value as HTMLElement).innerHTML = ''
+        pages.push(currentPage);
+        (hiddenContainer.value as HTMLElement).innerHTML = '';
       }
-      return pages
-    }
+      return pages;
+    };
 
     const renderPage = (pageIndex: number) => {
-      const contentContainer = shadowRoot.value?.querySelector('#content-container') as HTMLElement
-      contentContainer.innerHTML = ''
+      const contentContainer = shadowRoot.value?.querySelector('#content-container') as HTMLElement;
+      contentContainer.innerHTML = '';
       pages.value[pageIndex].forEach((element) => {
-        contentContainer.appendChild(element.cloneNode(true))
-      })
-      readProgress.value = pageIndex / (totalPages.value - 1)
-    }
+        contentContainer.appendChild(element.cloneNode(true));
+      });
+      readProgress.value = pageIndex / (totalPages.value - 1);
+    };
     const prevPage = () => {
       if (currentPage.value > 0) {
-        currentPage.value--
-        renderPage(currentPage.value)
+        currentPage.value--;
+        renderPage(currentPage.value);
       }
-    }
+    };
 
     const nextPage = () => {
       if (currentPage.value < totalPages.value - 1) {
-        currentPage.value++
-        renderPage(currentPage.value)
+        currentPage.value++;
+        renderPage(currentPage.value);
       }
-    }
+    };
 
     const adjustFontSize = () => {
-      if (!shadowRoot.value) return
+      if (!shadowRoot.value) return;
 
       // 查找已注入的样式
-      let style = shadowRoot.value.querySelector('.font-size-styles')
+      let style = shadowRoot.value.querySelector('.font-size-styles');
 
       if (!style) {
         // 如果样式没有注入，则创建并注入样式
-        style = document.createElement('style')
-        style.className = 'font-size-styles' // 给样式添加一个唯一的 class
-        shadowRoot.value.appendChild(style)
+        style = document.createElement('style');
+        style.className = 'font-size-styles'; // 给样式添加一个唯一的 class
+        shadowRoot.value.appendChild(style);
       }
 
       // 更新样式内容
@@ -146,103 +139,107 @@ export default defineComponent({
     div h1, div h2, div h3, div h4, div h5, div h6 {
       font-size: ${headingFontSize.value}px !important;
     }
-  `
-    }
+  `;
+    };
 
     const updateFontSize = (value: number) => {
-      fontSize.value = value
-      showPage() // 页面更新
-    }
+      fontSize.value = value;
+      showPage(); // 页面更新
+    };
 
     const updateHeadingFontSize = (value: number) => {
-      headingFontSize.value = value
-      showPage() // 页面更新
-    }
+      headingFontSize.value = value;
+      showPage(); // 页面更新
+    };
 
-    const showPage = (pageIndex: number | null = null) => {
-      adjustFontSize()
-      pages.value = getPages(rawElements.value as HTMLElement[])
-      if (pageIndex === null) {
+    const showPage = (pageIndex?: number) => {
+      if (hiddenContainer.value === undefined) return;
+      if (readerContainer.value === undefined) return;
+      adjustFontSize();
+      hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
+      readerContainer.value.style.width = `${readerWidth.value}px`;
+      pages.value = getPages(rawElements.value as HTMLElement[]);
+      if (pageIndex === undefined) {
         //! 这堆抽象东西用来防止拖字体大小拉爆阅读器
-        const temp = Math.round(totalPages.value * readProgress.value)
+        const temp = Math.round(totalPages.value * readProgress.value);
         // console.log("will to",temp,"max",totalPages.value)
         if (temp >= totalPages.value - 1) {
           // console.log("too high")
-          currentPage.value = totalPages.value - 1
+          currentPage.value = totalPages.value - 1;
         } else if (temp < 0) {
-          currentPage.value = 0
+          currentPage.value = 0;
         } else {
-          currentPage.value = temp
+          currentPage.value = temp;
         }
       } else {
-        currentPage.value = pageIndex
+        currentPage.value = pageIndex;
       }
       // console.log(currentPage.value)
-      renderPage(currentPage.value)
-    }
+      renderPage(currentPage.value);
+    };
 
     const loadContent = async () => {
       try {
-        const response = await fetch('content.html')
-        const text = await response.text()
+        const response = await fetch('content.html');
+        const text = await response.text();
 
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(text, 'text/html')
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
 
-        const patchouliContainer = patchouliContent.value as HTMLElement
-        shadowRoot.value = patchouliContainer.attachShadow({ mode: 'open' })
+        const patchouliContainer = patchouliContent.value as HTMLElement;
+        shadowRoot.value = patchouliContainer.attachShadow({ mode: 'open' });
 
-        const title = doc.querySelector('title')?.innerText
+        const title = doc.querySelector('title')?.innerText;
         if (title) {
-          document.title = title
+          document.title = title;
         }
 
-        hiddenContainer.value = document.createElement('div')
-        hiddenContainer.value.style.position = 'absolute'
-        hiddenContainer.value.style.visibility = 'hidden'
-        hiddenContainer.value.style.height = 'auto'
-        hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`
+        hiddenContainer.value = document.createElement('div');
+        hiddenContainer.value.style.position = 'absolute';
+        hiddenContainer.value.style.visibility = 'hidden';
+        hiddenContainer.value.style.height = 'auto';
+        hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
 
-        shadowRoot.value.appendChild(hiddenContainer.value)
-        const contentContainer = document.createElement('div')
-        contentContainer.id = 'content-container'
-        contentContainer.style.width = `${readerWidth.value}px`
-        shadowRoot.value.appendChild(contentContainer)
+        shadowRoot.value.appendChild(hiddenContainer.value);
+        readerContainer.value = document.createElement('div');
+        readerContainer.value.id = 'content-container';
+        readerContainer.value.style.width = `${readerWidth.value}px`;
+        shadowRoot.value.appendChild(readerContainer.value);
 
-        const linkTags = doc.querySelectorAll('link[rel="stylesheet"]')
+        const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
         linkTags.forEach((link) => {
-          const htmlLink = link as HTMLLinkElement
+          const htmlLink = link as HTMLLinkElement;
           if (!shadowRoot.value?.querySelector(`link[href="${htmlLink.href}"]`)) {
-            const newLink = document.createElement('link')
-            newLink.rel = 'stylesheet'
-            newLink.href = htmlLink.href
-            shadowRoot.value?.appendChild(newLink)
+            const newLink = document.createElement('link');
+            newLink.rel = 'stylesheet';
+            newLink.href = htmlLink.href;
+            shadowRoot.value?.appendChild(newLink);
           }
-        })
+        });
 
-        const styleTags = doc.querySelectorAll('style')
+        const styleTags = doc.querySelectorAll('style');
         styleTags.forEach((style) => {
-          const styleElement = document.createElement('style')
-          styleElement.innerHTML = style.innerHTML
-          shadowRoot.value?.appendChild(styleElement)
-        })
+          const styleElement = document.createElement('style');
+          styleElement.innerHTML = style.innerHTML;
+          shadowRoot.value?.appendChild(styleElement);
+        });
 
-        const bodyContent = doc.querySelector('body')?.innerHTML || ''
-        contentContainer.innerHTML = bodyContent
-        rawElements.value = flattenDOM(contentContainer)
-        showPage(0) //! 显示首页
+        const bodyContent = doc.querySelector('body')?.innerHTML || '';
+        readerContainer.value.innerHTML = bodyContent;
+        rawElements.value = flattenDOM(readerContainer.value);
+        showPage(0); //! 显示首页
       } catch (error) {
-        console.error('加载内容失败:', error)
+        console.error('加载内容失败:', error);
       }
-    }
+    };
 
     // 生命周期钩子
     onMounted(() => {
       nextTick(() => {
         // 等待 Vue 完成 DOM 更新后获取元素的尺寸
         if (patchouliReader.value) {
-          readerWidth.value = patchouliReader.value.offsetWidth
-          maxHeight.value = patchouliReader.value.offsetHeight
+          readerWidth.value = patchouliReader.value.offsetWidth;
+          maxHeight.value = patchouliReader.value.offsetHeight;
         }
         //TODO 更改成vue风格
         // const readerApp = document.getElementById('patchouli-reader') as HTMLElement
@@ -251,14 +248,14 @@ export default defineComponent({
         //   maxHeight.value = readerApp.offsetHeight
         // }
         // console.log('width', readerWidth.value, 'height', maxHeight.value)
-        loadContent()
-        window.addEventListener('resize', handleResize)
-      })
-    })
+        loadContent();
+        window.addEventListener('resize', handleResize);
+      });
+    });
 
     onBeforeUnmount(() => {
-      window.removeEventListener('resize', handleResize)
-    })
+      window.removeEventListener('resize', handleResize);
+    });
 
     return {
       rawElements,
@@ -274,9 +271,9 @@ export default defineComponent({
       showPage,
       patchouliContent,
       patchouliReader,
-    }
+    };
   },
-})
+});
 </script>
 
 <style scoped>

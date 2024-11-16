@@ -23,7 +23,7 @@
     <div class="font-panel" v-if="!isCollapsed">
       <div class="size-bar">
         <label for="fontSize">正文大小：</label>
-        <input type="range" id="fontSize" v-model.number="fontSize" min="10" max="30" step="1" />
+        <input type="range" id="fontSize" v-model.number="fontSize" min="10" max="50" step="1" />
         <span>{{ fontSize }} px</span>
       </div>
 
@@ -35,7 +35,7 @@
           id="headingFontSize"
           v-model.number="headingFontSize"
           min="20"
-          max="40"
+          max="80"
           step="1"
         />
         <span>{{ headingFontSize }} px</span>
