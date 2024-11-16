@@ -114,25 +114,12 @@ const handleSwipe = () => {
   if (touchStartX.value === 0 || touchEndX.value === 0) return;
 
   const swipeDistance = touchEndX.value - touchStartX.value;
-  const swipeThreshold = 50; // 设置滑动的阈值
+  const swipeThreshold = 100; // 设置滑动的阈值
 
   if (swipeDistance > swipeThreshold) {
     prevPage(); // 右滑（向右滑动）
   } else if (swipeDistance < -swipeThreshold) {
     nextPage(); // 左滑（向左滑动）
-  } else {
-    // 未达到滑动阈值，视为普通点击
-    const clickX = touchEndX.value;
-    const screenWidth = window.innerWidth;
-    const edgeWidth = screenWidth * 0.2; // 边缘区域为 20%
-
-    if (clickX < edgeWidth) {
-      prevPage(); // 点击左侧20%区域
-    } else if (clickX > screenWidth - edgeWidth) {
-      nextPage(); // 点击右侧20%区域
-    } else {
-      onReaderClick.value = true; // 非边缘区域点击
-    }
   }
 };
 

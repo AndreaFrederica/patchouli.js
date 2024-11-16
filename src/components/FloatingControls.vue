@@ -72,7 +72,8 @@ const isCollapsed = ref<boolean>(false); // 控制折叠状态
 watch([(onReaderClick as Ref<boolean>)], ()=>{
   if((onReaderClick as Ref<boolean>).value === true){
     toggleCollapse();
-    (onReaderClick as Ref<boolean>).value = false
+    (onReaderClick as Ref<boolean>).value = false;
+      console.log("2222",(onReaderClick as Ref<boolean>).value)
       // 清标志位
   }
 })
@@ -86,6 +87,8 @@ const nextPage = () => {
 };
 
 const toggleCollapse = () => {
+  // console.log("1111")
+  console.log("1111",(onReaderClick as Ref<boolean>).value)
   isCollapsed.value = !isCollapsed.value; // 切换折叠状态
 };
 </script>
