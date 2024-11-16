@@ -19,7 +19,6 @@
 
       <!-- 浮动控件容器 -->
       <floating-controls
-        :onReaderClick="onReaderClick"
         :current-page="currentPage + 1"
         :total-pages="totalPages"
         :progress="progress"
@@ -27,14 +26,13 @@
         v-model:headingFontSize="headingFontSize"
         @prev-page="prevPage"
         @next-page="nextPage"
-        @end-on-reader-click="endOnReaderClick"
       />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onBeforeUnmount, ref, computed, nextTick, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, computed, nextTick, watch, provide } from 'vue';
 import FloatingControls from '@/components/FloatingControls.vue';
 
 const rawElements = ref<HTMLElement[]>(); // 原始html内容
@@ -53,11 +51,16 @@ const patchouliReader = ref<HTMLElement>();
 
 const touchStartX = ref(0);
 const touchEndX = ref(0);
+const touchStartTime = ref<number | null>(null); // 记录触摸开始时间
+const LONG_PRESS_THRESHOLD = ref(500); // 长按阈值（毫秒）
 
 const totalPages = computed(() => pages.value.length);
 const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100);
 
-const onReaderClick = ref(0);
+const flag_high_level_paged_engine = ref(true);
+
+const onReaderClick = ref(false);
+provide(/* 注入名 */ 'PatchouliReader_onReaderClick', /* 值 */ onReaderClick);
 
 const handleResize = () => {
   if (patchouliReader.value) {
@@ -66,53 +69,79 @@ const handleResize = () => {
   }
 };
 
-const endOnReaderClick = () => {
-  onReaderClick.value = 0;
-  // 清弹出状态栏的中断
-};
-
 // 点击翻页处理函数
 const handleClick = (event: MouseEvent) => {
   const clickX = event.clientX;
   const screenWidth = window.innerWidth;
-  const edgeWidth = screenWidth * 0.4; // 边缘区域为 20%
+  const edgeWidth = screenWidth * 0.2; // 边缘区域为 20%
 
-  // 仅在左右边缘20%点击才触发翻页
   if (clickX < edgeWidth) {
     prevPage(); // 点击左侧20%区域
   } else if (clickX > screenWidth - edgeWidth) {
     nextPage(); // 点击右侧20%区域
   } else {
-    // console.log('11111');
-    onReaderClick.value = 1;
+    onReaderClick.value = true; // 非边缘区域点击
   }
 };
 
-// 触摸滑动开始处理函数（全屏检测）
+// 触摸滑动开始处理函数
 const handleTouchStart = (event: TouchEvent) => {
   touchStartX.value = event.touches[0].clientX;
+  touchStartTime.value = Date.now(); // 记录触摸开始时间
 };
 
-// 触摸滑动结束处理函数（全屏检测）
+// 触摸滑动结束处理函数
 const handleTouchEnd = (event: TouchEvent) => {
   touchEndX.value = event.changedTouches[0].clientX;
-  handleSwipe();
+  const touchEndTime = Date.now(); // 记录触摸结束时间
+
+  const duration = touchEndTime - (touchStartTime.value ?? touchEndTime);
+
+  if (duration >= LONG_PRESS_THRESHOLD.value) {
+    handleLongPress(); // 长按事件
+  } else {
+    handleSwipe(); // 滑动或点击事件
+  }
+
+  // 清理状态
+  touchStartX.value = 0;
+  touchEndX.value = 0;
+  touchStartTime.value = 0;
 };
 
-// 滑动处理函数（全屏范围内检测滑动）
+// 滑动处理函数
 const handleSwipe = () => {
-  if (touchStartX.value === null || touchEndX.value === null) return;
+  if (touchStartX.value === 0 || touchEndX.value === 0) return;
 
   const swipeDistance = touchEndX.value - touchStartX.value;
-  // 设置滑动的阈值，避免误触
-  const swipeThreshold = 50;
+  const swipeThreshold = 50; // 设置滑动的阈值
 
   if (swipeDistance > swipeThreshold) {
     prevPage(); // 右滑（向右滑动）
   } else if (swipeDistance < -swipeThreshold) {
     nextPage(); // 左滑（向左滑动）
+  } else {
+    // 未达到滑动阈值，视为普通点击
+    const clickX = touchEndX.value;
+    const screenWidth = window.innerWidth;
+    const edgeWidth = screenWidth * 0.2; // 边缘区域为 20%
+
+    if (clickX < edgeWidth) {
+      prevPage(); // 点击左侧20%区域
+    } else if (clickX > screenWidth - edgeWidth) {
+      nextPage(); // 点击右侧20%区域
+    } else {
+      onReaderClick.value = true; // 非边缘区域点击
+    }
   }
 };
+
+// 长按处理函数
+const handleLongPress = () => {
+  console.log('长按事件触发');
+  // 在此处理长按事件逻辑
+};
+
 const flattenDOM = (node: Node): HTMLElement[] => {
   let elements: HTMLElement[] = [];
   node.childNodes.forEach((child) => {
@@ -141,6 +170,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
     }
   });
   if (currentPage.length > 0) {
+    // 最后一页
     pages.push(currentPage);
     (hiddenContainer.value as HTMLElement).innerHTML = '';
   }
@@ -158,6 +188,7 @@ const renderPage = (pageIndex: number) => {
   });
   readProgress.value = pageIndex / (totalPages.value - 1);
 };
+
 const prevPage = () => {
   if (currentPage.value > 0) {
     currentPage.value--;

@@ -1,5 +1,5 @@
 <template>
-  <div class="floating-controls" :class="{ collapsed: isCollapsed }">
+  <div class="floating-controls" :class="{ collapsed: isCollapsed }" @click.stop>
     <!-- 折叠按钮 -->
     <button class="toggle-btn" @click.stop="toggleCollapse">
       {{ isCollapsed ? 'Expand' : 'Collapse' }}
@@ -45,9 +45,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, type Ref } from 'vue';
+import { inject, ref, watch, type Ref } from 'vue';
 
-const emit = defineEmits(['prev-page', 'next-page', 'end-on-reader-click']);
+const onReaderClick = inject("PatchouliReader_onReaderClick");
+
+const emit = defineEmits(['prev-page', 'next-page']);
 const props = defineProps({
   currentPage: {
     type: Number,
@@ -61,27 +63,20 @@ const props = defineProps({
     type: Number,
     required: true,
   },
-  onReaderClick: {
-    type: Number,
-    required: true,
-  }, // 处理reader窗体中间被点击 需要弹出状态栏 如果number = 1 则为事件产生 处理完后请手动置为 0
 });
 
 const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true });
 const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true });
 const isCollapsed = ref<boolean>(false); // 控制折叠状态
 
-watch(
-  () => props.onReaderClick,
-  (newValue) => {
-    if (newValue === 1) {
-      // console.log('弹出状态栏');
-      emit('end-on-reader-click');
-      // 可以在这里触发 UI 弹出逻辑，如显示某个弹窗
-      toggleCollapse();
-    }
-  },
-);
+watch([(onReaderClick as Ref<boolean>)], ()=>{
+  if((onReaderClick as Ref<boolean>).value === true){
+    toggleCollapse();
+    (onReaderClick as Ref<boolean>).value = false
+      // 清标志位
+  }
+})
+
 const prevPage = () => {
   emit('prev-page');
 };
