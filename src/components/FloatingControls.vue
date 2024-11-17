@@ -50,6 +50,7 @@ import { inject, ref, watch, type Ref } from 'vue';
 const onReaderClick = inject("PatchouliReader_onReaderClick");
 
 const emit = defineEmits(['prev-page', 'next-page']);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const props = defineProps({
   currentPage: {
     type: Number,
@@ -73,7 +74,7 @@ watch([(onReaderClick as Ref<boolean>)], ()=>{
   if((onReaderClick as Ref<boolean>).value === true){
     toggleCollapse();
     (onReaderClick as Ref<boolean>).value = false;
-      console.log("2222",(onReaderClick as Ref<boolean>).value)
+      // console.log("2222",(onReaderClick as Ref<boolean>).value)
       // 清标志位
   }
 })
@@ -88,7 +89,7 @@ const nextPage = () => {
 
 const toggleCollapse = () => {
   // console.log("1111")
-  console.log("1111",(onReaderClick as Ref<boolean>).value)
+  // console.log("1111",(onReaderClick as Ref<boolean>).value)
   isCollapsed.value = !isCollapsed.value; // 切换折叠状态
 };
 </script>
