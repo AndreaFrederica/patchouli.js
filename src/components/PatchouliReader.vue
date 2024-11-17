@@ -207,42 +207,48 @@ const getParagraphs_Simple = (element: HTMLElement): HTMLElement[] | undefined =
   return [part1, part2]; // 返回两个分页部分
 };
 
-
 const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   const pages: HTMLElement[][] = [];
   let currentPage: HTMLElement[] = [];
-
   if (elements === undefined) return pages;
+  if (flag_high_level_paged_engine.value) {
+    let lastElementHeight = 0;
 
-  let lastElementHeight = 0;
+    // 使用普通的 for 循环遍历元素数组
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
 
-  // 使用普通的 for 循环遍历元素数组
-  for (let i = 0; i < elements.length; i++) {
-    const element = elements[i];
+      // 克隆元素并将其添加到隐藏容器中
+      (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+      const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
 
-    // 克隆元素并将其添加到隐藏容器中
-    (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-    const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
-
-    if (elementHeight > maxHeight.value) {
-      if (flag_high_level_paged_engine.value) {
-        // 启用高阶分页
-        if (flag_aggressive_paging_engine.value) {
-          // 启用激进分页模式
-          if (lastElementHeight / maxHeight.value < aggressive_paging_threshold) {
-            // 对激进分页模式进行处理
-            const result = getParagraphs_Simple(element);
-            if (result) {
-              const [part1, part2] = result;
-              currentPage.push(part1);
-              elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
-              pages.push(currentPage);
-              (hiddenContainer.value as HTMLElement).innerHTML = '';
-              (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
-              currentPage = [];
-              lastElementHeight = elementHeight;
+      if (elementHeight > maxHeight.value) {
+        if (flag_high_level_paged_engine.value) {
+          // 启用高阶分页
+          if (flag_aggressive_paging_engine.value) {
+            // 启用激进分页模式
+            if (lastElementHeight / maxHeight.value < aggressive_paging_threshold) {
+              // 对激进分页模式进行处理
+              const result = getParagraphs_Simple(element);
+              if (result) {
+                const [part1, part2] = result;
+                currentPage.push(part1);
+                elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
+                pages.push(currentPage);
+                (hiddenContainer.value as HTMLElement).innerHTML = '';
+                (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
+                currentPage = [];
+                lastElementHeight = elementHeight;
+              } else {
+                // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
+                pages.push(currentPage);
+                (hiddenContainer.value as HTMLElement).innerHTML = '';
+                (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+                currentPage = [];
+                lastElementHeight = elementHeight;
+              }
             } else {
-              // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
+              // 降级 按默认逻辑分页
               pages.push(currentPage);
               (hiddenContainer.value as HTMLElement).innerHTML = '';
               (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
@@ -250,65 +256,78 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
               lastElementHeight = elementHeight;
             }
           } else {
-            // 降级 按默认逻辑分页
-            pages.push(currentPage);
-            (hiddenContainer.value as HTMLElement).innerHTML = '';
-            (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-            currentPage = [];
-            lastElementHeight = elementHeight;
-          }
-        } else {
-          // 只对单段落超长页面处理
-          if (currentPage.length == 1) {
-            const result = getParagraphs_Simple(element);
-            if (result) {
-              const [part1, part2] = result;
-              currentPage.push(part1);
-              elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
-              pages.push(currentPage);
-              (hiddenContainer.value as HTMLElement).innerHTML = '';
-              (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
-              currentPage = [];
-              lastElementHeight = 0;
+            // 只对单段落超长页面处理
+            if (currentPage.length == 1) {
+              const result = getParagraphs_Simple(element);
+              if (result) {
+                const [part1, part2] = result;
+                currentPage.push(part1);
+                elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
+                pages.push(currentPage);
+                (hiddenContainer.value as HTMLElement).innerHTML = '';
+                (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
+                currentPage = [];
+                lastElementHeight = 0;
+              } else {
+                // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
+                pages.push(currentPage);
+                (hiddenContainer.value as HTMLElement).innerHTML = '';
+                (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+                currentPage = [];
+                lastElementHeight = 0;
+              }
             } else {
-              // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
+              //不是对应情况，按默认逻辑分页
               pages.push(currentPage);
               (hiddenContainer.value as HTMLElement).innerHTML = '';
               (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
               currentPage = [];
               lastElementHeight = 0;
             }
-          }else{
-        //不是对应情况，按默认逻辑分页
-        pages.push(currentPage);
-        (hiddenContainer.value as HTMLElement).innerHTML = '';
-        (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-        currentPage = [];
-        lastElementHeight = 0;
           }
+        } else {
+          // 没有启用高阶分页，按默认逻辑分页
+          pages.push(currentPage);
+          (hiddenContainer.value as HTMLElement).innerHTML = '';
+          (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+          currentPage = [];
+          lastElementHeight = 0;
         }
       } else {
-        // 没有启用高阶分页，按默认逻辑分页
+        // 没有发生分页
+        currentPage.push(element);
+        lastElementHeight = elementHeight;
+      }
+    }
+
+    // 处理最后一页
+    if (currentPage.length > 0) {
+      // 普通分页
+      pages.push(currentPage);
+    }
+    (hiddenContainer.value as HTMLElement).innerHTML = '';
+    return pages;
+  } else {
+    // 最原始的老版本函数
+    elements.forEach((element) => {
+      (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true)); // 类型断言为 HTMLElement
+      const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
+      if (elementHeight > maxHeight.value) {
         pages.push(currentPage);
         (hiddenContainer.value as HTMLElement).innerHTML = '';
         (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-        currentPage = [];
-        lastElementHeight = 0;
+        currentPage = [element];
+      } else {
+        currentPage.push(element);
       }
-    } else {
-      // 没有发生分页
-      currentPage.push(element);
-      lastElementHeight = elementHeight;
+    });
+    if (currentPage.length > 0) {
+      // 最后一页
+      pages.push(currentPage);
+      (hiddenContainer.value as HTMLElement).innerHTML = '';
     }
+    return pages;
   }
-
-  // 处理最后一页
-  if (currentPage.length > 0) {
-    // 普通分页
-    pages.push(currentPage);
-  }
-  (hiddenContainer.value as HTMLElement).innerHTML = '';
-  return pages;
 };
 
 const renderPage = (pageIndex: number) => {
