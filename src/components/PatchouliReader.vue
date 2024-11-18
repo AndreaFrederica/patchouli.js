@@ -65,14 +65,14 @@ const displayReadProgress = computed(() => readProgress.value * 100)
 // 高阶分页支持
 const flag_high_level_paged_engine = ref(true);
 //TODO 依赖于深拷贝运行 但是不启用目前也没有去掉深拷贝（安全性）
-const flag_single_page_mode = ref(true);
+const flag_single_page_mode = ref(false);
 // TODO 未全部完成 单页流式阅读器
 // 启用激进分页模式 目前一直开着
 const flag_aggressive_paging_engine = ref(false);
 // 激进分页模式的阈值 小于这个就进行激进分页
-const aggressive_paging_threshold = 0.9; // 默认值为 0.9
+const aggressive_paging_threshold = 0.95; // 默认值为 0.9
 // 分页模式的阈值 小于这个就进行分页
-const paging_threshold = 0.9; // 默认值为 0.9
+const paging_threshold = 0.95; // 默认值为 0.9
 
 const onReaderClick = ref(false);
 provide('PatchouliReader_onReaderClick',onReaderClick);

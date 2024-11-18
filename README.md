@@ -1,45 +1,24 @@
-# patchouli.js
+# Patchouli.js
+![bak.png](https://img.picui.cn/free/2024/11/19/673b8ffe6e7f3.png)
 
-This template should help get you started developing with Vue 3 in Vite.
+## 简介
 
-## Recommended IDE Setup
+Patchouli.js 是一个基于 Vue 编写的 HTML 文档阅读器，支持单页和分页显示。它提供了灵活的界面和便捷的功能，允许用户在不同模式下查看文档内容，支持页面翻页、字体大小调整等功能，旨在提供一个用户友好的阅读体验。
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 特性
 
-## Type Support for `.vue` Imports in TS
+- **单页与分页显示**：可以切换不同的显示模式，满足不同用户的需求。
+- **翻页功能**：提供上一页、下一页的翻页控制，用户可以通过按钮方便地切换文档页。
+- **字体大小调整**：用户可以根据自己的阅读习惯，动态调整文档正文和标题的字体大小。
+- **高阶分页引擎**：根据需要启用更为复杂的分页控制，适应大型文档的阅读需求。
+- **折叠面板**：提供一个可折叠的浮动面板，包含翻页、字体设置和模式切换等控制选项。
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+## 待办事项清单
 
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-pnpm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-pnpm dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-pnpm build
-```
-
-### Run Unit Tests with [Vitest](https://vitest.dev/)
-
-```sh
-pnpm test:unit
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-pnpm lint
-```
+- [ ] 更好的分页引擎
+- [ ] 显示区域调整
+- [ ] 完整的弹出工具栏
+- [ ] 上状态栏
+- [ ] 下状态栏
+- [ ] 注解支持
+- [ ] epub支持
