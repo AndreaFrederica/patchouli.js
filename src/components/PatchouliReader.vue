@@ -35,7 +35,8 @@
 import { onMounted, onBeforeUnmount, ref, computed, nextTick, watch, provide } from 'vue';
 import FloatingControls from '@/components/FloatingControls.vue';
 
-const rawElements = ref<HTMLElement[]>(); // 原始html内容
+// const rawElements = ref<HTMLElement[]>(); // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
+let rawElements: undefined | HTMLElement[] = undefined; // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
 const pages = ref<HTMLElement[][]>([]); // 页面的元素数组，每页元素为 HTMLElement 数组
 const currentPage = ref(0);
 const maxHeight = ref(600); // 单页最大高度
@@ -58,12 +59,16 @@ const totalPages = computed(() => pages.value.length);
 const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100);
 
 // 高阶分页支持
-const flag_high_level_paged_engine = ref(false);
+const flag_high_level_paged_engine = ref(true);
 //TODO 无法使用 因为其依赖的深拷贝有点问题？ 但是好像又不是这个问题
+const flag_single_page_mode = ref(false);
+// TODO 未完成 单页流式阅读器
 // 启用激进分页模式
 const flag_aggressive_paging_engine = ref(false);
 // 激进分页模式的阈值 小于这个就进行激进分页
 const aggressive_paging_threshold = 0.9; // 默认值为 0.9
+// 分页模式的阈值 小于这个就进行分页
+const paging_threshold = 0.9; // 默认值为 0.9
 
 const onReaderClick = ref(false);
 provide(/* 注入名 */ 'PatchouliReader_onReaderClick', /* 值 */ onReaderClick);
@@ -165,20 +170,15 @@ const cloneElementStyleAndClass = (element: HTMLElement): HTMLElement => {
 // original && document.body.appendChild(cloneElementWithStyleAndClass(original)!);
 
 // 最简单的高阶切分算法 没考虑div套娃 需要更多高级切分算法做补充
-const getParagraphs_Simple = (element: HTMLElement): HTMLElement[] | undefined => {
+const getParagraphs_Simple = (element: HTMLElement): [HTMLElement, HTMLElement] | undefined => {
   const part1 = cloneElementStyleAndClass(element);
   const part2 = cloneElementStyleAndClass(element);
 
   // 获取原始文本内容
   const text = element.innerText;
-
-  // 清除页面容器中的最后一个重复元素
   const container = hiddenContainer.value as HTMLElement;
-  container.removeChild(container.lastChild);
-
   // 将 part1 添加到隐藏容器中
   container.appendChild(part1);
-
   // 设置 part1 的内容，并进行分页检测
   let part1Text = '';
   for (const char of text) {
@@ -191,10 +191,10 @@ const getParagraphs_Simple = (element: HTMLElement): HTMLElement[] | undefined =
       break;
     }
   }
-
   if (part1Text.length <= 5) return;
-
   // 将剩余的文本交给 part2
+  part1Text = part1Text.substring(0, part1Text.length - 1);
+  part1.innerText = part1Text;
   const remainingText = text.slice(part1Text.length);
   part2.innerText = remainingText;
 
@@ -211,111 +211,57 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   const pages: HTMLElement[][] = [];
   let currentPage: HTMLElement[] = [];
   if (elements === undefined) return pages;
+  let flag_high_level_paged = false;
   if (flag_high_level_paged_engine.value) {
-    let lastElementHeight = 0;
-
-    // 使用普通的 for 循环遍历元素数组
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-
-      // 克隆元素并将其添加到隐藏容器中
-      (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-      const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
-
-      if (elementHeight > maxHeight.value) {
-        if (flag_high_level_paged_engine.value) {
-          // 启用高阶分页
-          if (flag_aggressive_paging_engine.value) {
-            // 启用激进分页模式
-            if (lastElementHeight / maxHeight.value < aggressive_paging_threshold) {
-              // 对激进分页模式进行处理
-              const result = getParagraphs_Simple(element);
-              if (result) {
-                const [part1, part2] = result;
-                currentPage.push(part1);
-                elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
-                pages.push(currentPage);
-                (hiddenContainer.value as HTMLElement).innerHTML = '';
-                (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
-                currentPage = [];
-                lastElementHeight = elementHeight;
-              } else {
-                // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
-                pages.push(currentPage);
-                (hiddenContainer.value as HTMLElement).innerHTML = '';
-                (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-                currentPage = [];
-                lastElementHeight = elementHeight;
-              }
-            } else {
-              // 降级 按默认逻辑分页
-              pages.push(currentPage);
-              (hiddenContainer.value as HTMLElement).innerHTML = '';
-              (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-              currentPage = [];
-              lastElementHeight = elementHeight;
-            }
-          } else {
-            // 只对单段落超长页面处理
-            if (currentPage.length == 1) {
-              const result = getParagraphs_Simple(element);
-              if (result) {
-                const [part1, part2] = result;
-                currentPage.push(part1);
-                elements.splice(i + 1, 0, part2); // 插入 part2 继续处理
-                pages.push(currentPage);
-                (hiddenContainer.value as HTMLElement).innerHTML = '';
-                (hiddenContainer.value as HTMLElement).appendChild(part2.cloneNode(true));
-                currentPage = [];
-                lastElementHeight = 0;
-              } else {
-                // 如果 getParagraphs_Simple 返回 undefined，回退到普通处理
-                pages.push(currentPage);
-                (hiddenContainer.value as HTMLElement).innerHTML = '';
-                (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-                currentPage = [];
-                lastElementHeight = 0;
-              }
-            } else {
-              //不是对应情况，按默认逻辑分页
-              pages.push(currentPage);
-              (hiddenContainer.value as HTMLElement).innerHTML = '';
-              (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-              currentPage = [];
-              lastElementHeight = 0;
-            }
-          }
-        } else {
-          // 没有启用高阶分页，按默认逻辑分页
-          pages.push(currentPage);
-          (hiddenContainer.value as HTMLElement).innerHTML = '';
-          (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
-          currentPage = [];
-          lastElementHeight = 0;
-        }
+    let i = 0;
+    let end = elements.length;
+    while (i < end) {
+      // if (flag_high_level_paged) i--; // i++最先计算 发生插入后需要用这个修正？
+      hiddenContainer.value?.appendChild(elements[i].cloneNode(true)); // 类型断言为 HTMLElement
+      const now_hight = (hiddenContainer.value as HTMLElement).scrollHeight;
+      if (now_hight <= maxHeight.value * paging_threshold) {
+        // 能塞得进去 往这一页里面塞东西
+        currentPage.push(elements[i]);
+        i++;
       } else {
-        // 没有发生分页
-        currentPage.push(element);
-        lastElementHeight = elementHeight;
+        // 碰撞测试失败 塞不进去 开始高级分页 或者结束一页
+        hiddenContainer.value?.removeChild(hiddenContainer.value.lastChild as HTMLElement); // 清理失败节点 给高级分页流出空间
+        let result = undefined; // 性能优化 避免重复调用高级分页算法
+        if (flag_high_level_paged === false) result = getParagraphs_Simple(elements[i]);
+        // console.log(flag_high_level_paged !== true && result !== undefined);
+        if (flag_high_level_paged !== true && result !== undefined) {
+          // 可以进行高级分页
+          flag_high_level_paged = true;
+          const part1 = result[0];
+          const part2 = result[1];
+          currentPage.push(part1.cloneNode(true));
+          elements.splice(i + 1, 0, part2.cloneNode(true));
+          i++;
+          end++;
+        } else {
+          // 结束一页 高级分页失败了也会回退到这里
+          pages.push(currentPage);
+          currentPage = [];
+          (hiddenContainer.value as HTMLElement).innerHTML = '';
+          flag_high_level_paged = false;
+        }
       }
     }
-
-    // 处理最后一页
     if (currentPage.length > 0) {
-      // 普通分页
+      // 最后一页
       pages.push(currentPage);
+      (hiddenContainer.value as HTMLElement).innerHTML = '';
     }
-    (hiddenContainer.value as HTMLElement).innerHTML = '';
     return pages;
   } else {
     // 最原始的老版本函数
     elements.forEach((element) => {
-      (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true)); // 类型断言为 HTMLElement
+      hiddenContainer.value?.appendChild(element.cloneNode(true)); // 类型断言为 HTMLElement
       const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight;
-      if (elementHeight > maxHeight.value) {
+      if (elementHeight > maxHeight.value * paging_threshold) {
         pages.push(currentPage);
         (hiddenContainer.value as HTMLElement).innerHTML = '';
-        (hiddenContainer.value as HTMLElement).appendChild(element.cloneNode(true));
+        hiddenContainer.value?.appendChild(element.cloneNode(true));
         currentPage = [element];
       } else {
         currentPage.push(element);
@@ -385,13 +331,18 @@ watch([fontSize, headingFontSize, maxHeight, readerWidth], () => {
   showPage(); // 页面更新
 });
 
+const cloneHTMLElementList = (elements: HTMLElement[]): HTMLElement[] =>
+  elements.map((el) => el.cloneNode(true) as HTMLElement);
+
 const showPage = (pageIndex?: number) => {
   if (hiddenContainer.value === undefined) return;
   if (readerContainer.value === undefined) return;
   adjustFontSize();
-  hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
+  hiddenContainer.value.style.width = `${readerWidth.value}px`;
   readerContainer.value.style.width = `${readerWidth.value}px`;
-  pages.value = getPages(rawElements.value as HTMLElement[]);
+  // pages.value = getPages(rawElements.value as HTMLElement[]);
+  const temp = cloneHTMLElementList(rawElements as HTMLElement[]);
+  pages.value = getPages(temp);
   if (pageIndex === undefined) {
     //! 这堆抽象东西用来防止拖字体大小拉爆阅读器
     //   const temp = Math.round(totalPages.value * readProgress.value);
@@ -459,7 +410,7 @@ const initReader = () => {
   // hiddenContainer.value.style.visibility = 'hidden';
   hiddenContainer.value.id = 'taster-container';
   hiddenContainer.value.style.height = 'auto';
-  hiddenContainer.value.style.width = `${readerWidth.value * 0.9}px`;
+  hiddenContainer.value.style.width = `${readerWidth.value}px`;
 
   shadowRoot.value.appendChild(hiddenContainer.value);
   readerContainer.value = document.createElement('div');
@@ -500,7 +451,9 @@ const loadContent = async () => {
     if (readerContainer.value === undefined) return;
     const bodyContent = doc.querySelector('body')?.innerHTML || '';
     readerContainer.value.innerHTML = bodyContent;
-    rawElements.value = flattenDOM(readerContainer.value);
+    // rawElements.value = flattenDOM(readerContainer.value);
+    const temp = readerContainer.value.cloneNode(true);
+    rawElements = flattenDOM(temp);
     // rawElements.value = deepClone(flattenDOM(readerContainer.value));
     //TODO 其实问题应该不是深拷贝？
 
