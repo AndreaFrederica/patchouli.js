@@ -1,12 +1,16 @@
 <template>
-  <div class="floating-controls" :class="{ collapsed: isCollapsed }" @click.stop>
-    <!-- 折叠按钮 -->
-    <button class="toggle-btn" @click.stop="toggleCollapse">
-      {{ isCollapsed ? 'Expand' : 'Collapse' }}
-    </button>
-
+  <!-- 折叠按钮 -->
+  <button class="toggle-btn" @click.stop="toggleCollapse">
+    {{ isCollapsed ? 'Expand' : 'Collapse' }}
+  </button>
+  <div
+    class="floating-controls"
+    :class="{ collapsed: isCollapsed }"
+    v-if="!isCollapsed"
+    @click.stop
+  >
     <!-- 翻页控件 -->
-    <div class="pagination-panel" v-if="!isCollapsed">
+    <div class="pagination-panel">
       <div class="pagination-info">
         <span>Page {{ currentPage }} of {{ totalPages }}</span>
       </div>
@@ -20,7 +24,7 @@
     </div>
 
     <!-- 字体大小调整控件 -->
-    <div class="font-panel" v-if="!isCollapsed">
+    <div class="font-panel">
       <div class="size-bar">
         <label for="fontSize">正文大小：</label>
         <input type="range" id="fontSize" v-model.number="fontSize" min="10" max="50" step="1" />
@@ -41,16 +45,25 @@
         <span>{{ headingFontSize }} px</span>
       </div>
     </div>
+    <div>
+      <!-- 模式切换按钮 -->
+      <div class="mode-buttons">
+        <button @click.stop="onPagedModeClick">{{ text_paged_mode_bottom }}</button>
+        <button @click.stop="onViewModeClick">{{ text_view_mode_bottom }}</button>
+      </div>
+      <!-- About Widget (图标和信息部分) -->
+      <br />
+      <AboutWidget />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { inject, ref, watch, type Ref } from 'vue';
+import { computed, inject, ref, watch, type Ref } from 'vue';
+import AboutWidget from './AboutWidget.vue';
 
-const onReaderClick = inject("PatchouliReader_onReaderClick");
-
-const emit = defineEmits(['prev-page', 'next-page']);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const onReaderClick = inject('PatchouliReader_onReaderClick');
+const emit = defineEmits(['prev-page', 'next-page', 'switch-view-mode', 'switch-paged_engine']);
 const props = defineProps({
   currentPage: {
     type: Number,
@@ -64,20 +77,35 @@ const props = defineProps({
     type: Number,
     required: true,
   },
+  enable_high_level_paged_engine: {
+    type: Boolean,
+    required: true,
+  },
+  enable_single_page_mode: {
+    type: Boolean,
+    required: true,
+  },
 });
 
 const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true });
 const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true });
 const isCollapsed = ref<boolean>(false); // 控制折叠状态
 
-watch([(onReaderClick as Ref<boolean>)], ()=>{
-  if((onReaderClick as Ref<boolean>).value === true){
+const text_paged_mode_bottom = computed(() =>
+  props.enable_high_level_paged_engine === true ? 'HighLevelPagedEngine' : 'LowLevelPagedEngine',
+);
+const text_view_mode_bottom = computed(() =>
+  props.enable_single_page_mode === true ? 'SinglePage' : 'MultiPage',
+);
+
+watch([onReaderClick as Ref<boolean>], () => {
+  if ((onReaderClick as Ref<boolean>).value === true) {
     toggleCollapse();
     (onReaderClick as Ref<boolean>).value = false;
-      // console.log("2222",(onReaderClick as Ref<boolean>).value)
-      // 清标志位
+    // console.log("2222",(onReaderClick as Ref<boolean>).value)
+    // 清标志位
   }
-})
+});
 
 const prevPage = () => {
   emit('prev-page');
@@ -85,6 +113,14 @@ const prevPage = () => {
 
 const nextPage = () => {
   emit('next-page');
+};
+
+const onViewModeClick = () => {
+  emit('switch-view-mode');
+};
+
+const onPagedModeClick = () => {
+  emit('switch-paged_engine');
 };
 
 const toggleCollapse = () => {
@@ -120,18 +156,34 @@ const toggleCollapse = () => {
   right: 80px;
 }
 
+/* 更新后的浮动按钮样式 */
+/* 初始按钮样式 */
 .toggle-btn {
-  position: absolute;
-  top: 10px;
-  /* left: 50%; */
-  transform: translateX(0%);
-  transform: translateY(-100%);
-  background-color: #4caf50;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(169, 169, 169, 0.5); /* 灰色且半透明 */
   color: white;
   border: none;
-  border-radius: 5%;
-  padding: 8px 16px;
+  border-radius: 5px; /* 轻微圆角 */
+  padding: 10px 20px;
   cursor: pointer;
+  font-size: 16px;
+  z-index: 1001; /* 确保按钮在其他元素之上 */
+  transition: background-color 0.3s ease, opacity 0.3s ease; /* 添加平滑过渡 */
+  opacity: 0.7; /* 初始状态下按钮稍微透明 */
+}
+
+/* 鼠标悬停时按钮样式 */
+.toggle-btn:hover {
+  background-color: #4caf50; /* 绿色背景 */
+  opacity: 1; /* 取消透明度 */
+}
+
+
+
+.toggle-btn:focus {
+  outline: none; /* 去除焦点框 */
 }
 
 .pagination-panel,
@@ -166,6 +218,16 @@ const toggleCollapse = () => {
   margin: 0 5px;
   font-size: 14px;
   background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 3px;
+}
+
+.mode-buttons button {
+  padding: 5px 10px;
+  margin: 0 5px;
+  font-size: 14px;
+  background-color: #499a97;
   color: white;
   border: none;
   border-radius: 3px;

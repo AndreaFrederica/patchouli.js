@@ -11,6 +11,7 @@ import PatchouliReader from './components/PatchouliReader.vue'
 /* 确保根元素（html 和 body）占满整个视口 */
 html,
 body {
+  width: 100vw;
   height: 100%;
   margin: 0;
   padding: 0;

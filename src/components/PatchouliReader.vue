@@ -21,11 +21,15 @@
       <floating-controls
         :current-page="currentPage + 1"
         :total-pages="totalPages"
-        :progress="progress"
+        :progress="displayReadProgress"
+        :enable_high_level_paged_engine="flag_high_level_paged_engine"
+        :enable_single_page_mode="flag_single_page_mode"
         v-model:fontSize="fontSize"
         v-model:headingFontSize="headingFontSize"
         @prev-page="prevPage"
         @next-page="nextPage"
+        @switch-paged_engine="switchPagedEngine"
+        @switch-view-mode="switchViewMode"
       />
     </div>
   </div>
@@ -35,8 +39,8 @@
 import { onMounted, onBeforeUnmount, ref, computed, nextTick, watch, provide } from 'vue';
 import FloatingControls from '@/components/FloatingControls.vue';
 
-// const rawElements = ref<HTMLElement[]>(); // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
-let rawElements: undefined | HTMLElement[] = undefined; // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
+const rawElements = ref<HTMLElement[]>(); // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
+// let rawElements: undefined | HTMLElement[] = undefined; // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
 const pages = ref<HTMLElement[][]>([]); // 页面的元素数组，每页元素为 HTMLElement 数组
 const currentPage = ref(0);
 const maxHeight = ref(600); // 单页最大高度
@@ -56,14 +60,14 @@ const touchStartTime = ref<number | null>(null); // 记录触摸开始时间
 const LONG_PRESS_THRESHOLD = ref(500); // 长按阈值（毫秒）
 
 const totalPages = computed(() => pages.value.length);
-const progress = computed(() => ((currentPage.value + 1) / totalPages.value) * 100);
+const displayReadProgress = computed(() => readProgress.value * 100)
 
 // 高阶分页支持
 const flag_high_level_paged_engine = ref(true);
-//TODO 无法使用 因为其依赖的深拷贝有点问题？ 但是好像又不是这个问题
-const flag_single_page_mode = ref(false);
-// TODO 未完成 单页流式阅读器
-// 启用激进分页模式
+//TODO 依赖于深拷贝运行 但是不启用目前也没有去掉深拷贝（安全性）
+const flag_single_page_mode = ref(true);
+// TODO 未全部完成 单页流式阅读器
+// 启用激进分页模式 目前一直开着
 const flag_aggressive_paging_engine = ref(false);
 // 激进分页模式的阈值 小于这个就进行激进分页
 const aggressive_paging_threshold = 0.9; // 默认值为 0.9
@@ -71,7 +75,7 @@ const aggressive_paging_threshold = 0.9; // 默认值为 0.9
 const paging_threshold = 0.9; // 默认值为 0.9
 
 const onReaderClick = ref(false);
-provide(/* 注入名 */ 'PatchouliReader_onReaderClick', /* 值 */ onReaderClick);
+provide('PatchouliReader_onReaderClick',onReaderClick);
 
 const handleResize = () => {
   if (patchouliReader.value) {
@@ -82,6 +86,12 @@ const handleResize = () => {
 
 // 点击翻页处理函数
 const handleClick = (event: MouseEvent) => {
+  // 检查是否存在选中的文本
+  const selection = window.getSelection();
+  if (selection && selection.toString().length > 0) {
+    return; // 如果有选中文本，则忽略点击事件
+  }
+
   const clickX = event.clientX;
   const screenWidth = window.innerWidth;
   const edgeWidth = screenWidth * 0.2; // 边缘区域为 20%
@@ -92,6 +102,28 @@ const handleClick = (event: MouseEvent) => {
     nextPage(); // 点击右侧20%区域
   } else {
     onReaderClick.value = true; // 非边缘区域点击
+  }
+};
+
+const handleWheel = (event: WheelEvent) => {
+  if (flag_single_page_mode.value !== true) {
+    //鼠标滚轮事件
+    if (event.deltaY > 0) {
+      // 向下滚动
+      nextPage();
+    } else if (event.deltaY < 0) {
+      // 向上滚动
+      prevPage();
+    }
+  } else {
+    // 单页模式下转为计算阅读进度
+    const scrollTop = window.scrollY; // 当前页面顶部滚动位置
+    const scrollHeight = document.documentElement.scrollHeight; // 整个文档高度
+    const clientHeight = document.documentElement.clientHeight; // 可视区域高度
+
+    // 确保不会出现分母为 0 的情况
+    readProgress.value =
+      (scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1);
   }
 };
 
@@ -212,7 +244,14 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   let currentPage: HTMLElement[] = [];
   if (elements === undefined) return pages;
   let flag_high_level_paged = false;
-  if (flag_high_level_paged_engine.value) {
+  if (flag_single_page_mode.value) {
+    // 单页流式阅读器
+    elements.forEach((element) => {
+      currentPage.push(element);
+    });
+    pages.push(currentPage);
+    return pages;
+  } else if (flag_high_level_paged_engine.value) {
     let i = 0;
     let end = elements.length;
     while (i < end) {
@@ -232,10 +271,8 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
         if (flag_high_level_paged !== true && result !== undefined) {
           // 可以进行高级分页
           flag_high_level_paged = true;
-          const part1 = result[0];
-          const part2 = result[1];
-          currentPage.push(part1.cloneNode(true));
-          elements.splice(i + 1, 0, part2.cloneNode(true));
+          currentPage.push(<HTMLElement>result[0].cloneNode(true));
+          elements.splice(i + 1, 0, <HTMLElement>result[1].cloneNode(true));
           i++;
           end++;
         } else {
@@ -285,7 +322,9 @@ const renderPage = (pageIndex: number) => {
   subPage.forEach((element) => {
     contentContainer.appendChild(element.cloneNode(true));
   });
-  readProgress.value = pageIndex / (totalPages.value - 1);
+  if (flag_single_page_mode.value !== true) {
+    readProgress.value = pageIndex / (totalPages.value - 1);
+  }
   contentContainer.style.visibility = 'visible';
 };
 
@@ -302,6 +341,14 @@ const nextPage = () => {
     renderPage(currentPage.value);
   }
 };
+
+const switchPagedEngine = () => {
+  flag_high_level_paged_engine.value = flag_high_level_paged_engine.value === true? false : true
+}
+
+const switchViewMode = () => {
+  flag_single_page_mode.value = flag_single_page_mode.value === true? false : true
+}
 
 const adjustFontSize = () => {
   if (!shadowRoot.value) return;
@@ -327,7 +374,7 @@ const adjustFontSize = () => {
   `;
 };
 
-watch([fontSize, headingFontSize, maxHeight, readerWidth], () => {
+watch([fontSize, headingFontSize, maxHeight, readerWidth, flag_high_level_paged_engine, flag_single_page_mode], () => {
   showPage(); // 页面更新
 });
 
@@ -341,23 +388,9 @@ const showPage = (pageIndex?: number) => {
   hiddenContainer.value.style.width = `${readerWidth.value}px`;
   readerContainer.value.style.width = `${readerWidth.value}px`;
   // pages.value = getPages(rawElements.value as HTMLElement[]);
-  const temp = cloneHTMLElementList(rawElements as HTMLElement[]);
+  const temp = cloneHTMLElementList(rawElements.value as HTMLElement[]);
   pages.value = getPages(temp);
-  if (pageIndex === undefined) {
-    //! 这堆抽象东西用来防止拖字体大小拉爆阅读器
-    //   const temp = Math.round(totalPages.value * readProgress.value);
-    //   // console.log("will to",temp,"max",totalPages.value)
-    //   if (temp >= totalPages.value - 1) {
-    //     // console.log("too high")
-    //     currentPage.value = totalPages.value - 1;
-    //   } else if (temp < 0) {
-    //     currentPage.value = 0;
-    //   } else {
-    //     currentPage.value = temp;
-    //   }
-    // } else {
-    //   currentPage.value = pageIndex;
-    // }
+  if (pageIndex === undefined && flag_single_page_mode.value != true) {
     if (totalPages.value > 1) {
       // 根据 readProgress 计算出 pageIndex
       const calculatedPageIndex = Math.round(readProgress.value * (totalPages.value - 1));
@@ -367,6 +400,14 @@ const showPage = (pageIndex?: number) => {
       // 如果总页数小于等于1，则始终在第0页
       pageIndex = 0;
     }
+  }
+  if (flag_single_page_mode.value) {
+    pageIndex = 0;
+  }
+  if (pageIndex === undefined) {
+    pageIndex = 0;
+    console.log('在计算页码的时候未覆盖了');
+    //TODO 这种情况真的存在吗
   }
   currentPage.value = pageIndex;
   // console.log(currentPage.value)
@@ -420,17 +461,26 @@ const initReader = () => {
   shadowRoot.value.appendChild(readerContainer.value);
 };
 
-const loadContent = async () => {
+const loadContent = async (url: string): Promise<void> => {
   try {
-    const response = await fetch('content.html');
+    // 获取 HTML 内容
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch content: ${response.status} ${response.statusText}`);
+    }
     const text = await response.text();
+
+    // 解析 HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(text, 'text/html');
+
+    // 更新页面标题
     const title = doc.querySelector('title')?.innerText;
     if (title) {
       document.title = title;
     }
 
+    // 添加 <link> 样式表
     const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
     linkTags.forEach((link) => {
       const htmlLink = link as HTMLLinkElement;
@@ -442,46 +492,53 @@ const loadContent = async () => {
       }
     });
 
+    // 添加内联样式 <style>
     const styleTags = doc.querySelectorAll('style');
     styleTags.forEach((style) => {
       const styleElement = document.createElement('style');
-      styleElement.innerHTML = style.innerHTML;
+      styleElement.textContent = style.textContent; // 优化为 textContent
       shadowRoot.value?.appendChild(styleElement);
     });
-    if (readerContainer.value === undefined) return;
+
+    // 确保阅读容器已初始化
+    if (!readerContainer.value) {
+      throw new Error('readerContainer 未初始化');
+    }
+
+    // 设置内容到阅读容器
     const bodyContent = doc.querySelector('body')?.innerHTML || '';
     readerContainer.value.innerHTML = bodyContent;
-    // rawElements.value = flattenDOM(readerContainer.value);
-    const temp = readerContainer.value.cloneNode(true);
-    rawElements = flattenDOM(temp);
-    // rawElements.value = deepClone(flattenDOM(readerContainer.value));
-    //TODO 其实问题应该不是深拷贝？
 
-    // const temp = structuredClone(readerContainer.value);
-    // rawElements.value = flattenDOM(temp);
-
-    showPage(0); //! 显示首页
+    // 克隆 DOM 并展平为元素列表
+    const clonedContent = readerContainer.value.cloneNode(true) as HTMLElement;
+    rawElements.value = flattenDOM(clonedContent);
   } catch (error) {
     console.error('加载内容失败:', error);
+    console.error(error);
   }
 };
 
 // 生命周期钩子
-onMounted(() => {
-  initReader(); //! 初始化未受vue托管的dom树
-  loadContent();
+onMounted(async () => {
+  initReader(); //! 初始化未受 Vue 托管的 DOM 树
+  await loadContent('content.html'); //! 加载内容
   nextTick(() => {
-    // 等待 Vue 完成 DOM 更新后获取元素的尺寸
+    // 设置尺寸并绑定事件
     if (patchouliReader.value) {
       readerWidth.value = patchouliReader.value.offsetWidth;
       maxHeight.value = patchouliReader.value.offsetHeight;
     }
     window.addEventListener('resize', handleResize);
+    window.addEventListener('wheel', handleWheel);
+    nextTick(() => {
+      showPage(0); //显示首页 不知道为什么 第一次预渲染不吃css
+    });
   });
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
+  window.removeEventListener('wheel', handleWheel);
 });
 </script>
 
