@@ -60,7 +60,7 @@ const touchStartTime = ref<number | null>(null); // 记录触摸开始时间
 const LONG_PRESS_THRESHOLD = ref(500); // 长按阈值（毫秒）
 
 const totalPages = computed(() => pages.value.length);
-const displayReadProgress = computed(() => readProgress.value * 100)
+const displayReadProgress = computed(() => readProgress.value * 100);
 
 // 高阶分页支持
 const flag_high_level_paged_engine = ref(true);
@@ -73,9 +73,12 @@ const flag_aggressive_paging_engine = ref(false);
 const aggressive_paging_threshold = 0.95; // 默认值为 0.9
 // 分页模式的阈值 小于这个就进行分页
 const paging_threshold = 0.95; // 默认值为 0.9
+const flag_flatten_DOM = ref(true);
+// 依赖展平dom树的方法来实现渲染
+// TODO 应当实现一个不依赖dom展平的分页器
 
 const onReaderClick = ref(false);
-provide('PatchouliReader_onReaderClick',onReaderClick);
+provide('PatchouliReader_onReaderClick', onReaderClick);
 
 const handleResize = () => {
   if (patchouliReader.value) {
@@ -123,7 +126,7 @@ const handleWheel = (event: WheelEvent) => {
 
     // 确保不会出现分母为 0 的情况
     readProgress.value =
-      (scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1);
+      scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1;
   }
 };
 
@@ -172,14 +175,73 @@ const handleLongPress = () => {
   // 在此处理长按事件逻辑
 };
 
-const flattenDOM = (node: Node): HTMLElement[] => {
-  let elements: HTMLElement[] = [];
-  node.childNodes.forEach((child) => {
-    if (child.nodeType === Node.ELEMENT_NODE) {
-      elements.push(child as HTMLElement);
-      elements = elements.concat(flattenDOM(child));
+const getParentTextContent = (element: HTMLElement): string => {
+  let directText = '';
+  Array.from(element.childNodes).forEach((child) => {
+    if (child instanceof Text) {
+      directText += child.nodeValue?.trim() || '';
     }
   });
+  return directText;
+};
+
+const flattenDOM = (
+  node: Node,
+  flattenCompletely: boolean,
+  parentClassPath = '',
+): HTMLElement[] => {
+  const elements: HTMLElement[] = [];
+
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const element = child as HTMLElement;
+
+      // 如果当前元素是 <ruby> 元素，直接保留
+      if (element.nodeName === 'RUBY') {
+        elements.push(element);
+        return;
+      }
+
+      // 如果没有子元素，跳过展平，直接保留该元素
+      if (!element.childNodes.length) {
+        elements.push(element);
+        return;
+      }
+
+      // 如果子元素只有 <ruby> 元素，保留 <ruby> 元素及其结构
+      const hasOnlyRubyChild = Array.from(element.childNodes).every(
+        (childNode) => childNode.nodeName === 'RUBY',
+      );
+
+      if (hasOnlyRubyChild) {
+        elements.push(element);
+        return;
+      }
+
+      if (flattenCompletely) {
+        // 处理完全展平逻辑
+        const currentClass = (node as HTMLElement).className || '';
+        const sanitizedClass = currentClass.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+
+        const classPath = parentClassPath
+          ? `${parentClassPath}__${sanitizedClass}`
+          : sanitizedClass;
+
+        if (classPath) {
+          element.className = `${element.className} parent-${classPath}`;
+        }
+
+        const clonedElement = element.cloneNode(false) as HTMLElement; // 浅克隆移除子节点
+        clonedElement.innerText = getParentTextContent(element);
+        elements.push(clonedElement);
+        elements.push(...flattenDOM(element, flattenCompletely, classPath));
+      } else {
+        // 保留嵌套关系，仅添加母节点本身
+        elements.push(element);
+      }
+    }
+  });
+
   return elements;
 };
 const cloneElementStyleAndClass = (element: HTMLElement): HTMLElement => {
@@ -250,6 +312,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
       currentPage.push(element);
     });
     pages.push(currentPage);
+    (hiddenContainer.value as HTMLElement).innerHTML = '';
     return pages;
   } else if (flag_high_level_paged_engine.value) {
     let i = 0;
@@ -277,6 +340,11 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
           end++;
         } else {
           // 结束一页 高级分页失败了也会回退到这里
+          if (currentPage.length === 0) {
+            // 高级分页引擎也无法处理的东西 比如说图片
+            currentPage.push(elements[i]);
+            i++;
+          }
           pages.push(currentPage);
           currentPage = [];
           (hiddenContainer.value as HTMLElement).innerHTML = '';
@@ -287,8 +355,8 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
     if (currentPage.length > 0) {
       // 最后一页
       pages.push(currentPage);
-      (hiddenContainer.value as HTMLElement).innerHTML = '';
     }
+    (hiddenContainer.value as HTMLElement).innerHTML = '';
     return pages;
   } else {
     // 最原始的老版本函数
@@ -307,8 +375,8 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
     if (currentPage.length > 0) {
       // 最后一页
       pages.push(currentPage);
-      (hiddenContainer.value as HTMLElement).innerHTML = '';
     }
+    (hiddenContainer.value as HTMLElement).innerHTML = '';
     return pages;
   }
 };
@@ -343,12 +411,12 @@ const nextPage = () => {
 };
 
 const switchPagedEngine = () => {
-  flag_high_level_paged_engine.value = flag_high_level_paged_engine.value === true? false : true
-}
+  flag_high_level_paged_engine.value = flag_high_level_paged_engine.value === true ? false : true;
+};
 
 const switchViewMode = () => {
-  flag_single_page_mode.value = flag_single_page_mode.value === true? false : true
-}
+  flag_single_page_mode.value = flag_single_page_mode.value === true ? false : true;
+};
 
 const adjustFontSize = () => {
   if (!shadowRoot.value) return;
@@ -374,9 +442,19 @@ const adjustFontSize = () => {
   `;
 };
 
-watch([fontSize, headingFontSize, maxHeight, readerWidth, flag_high_level_paged_engine, flag_single_page_mode], () => {
-  showPage(); // 页面更新
-});
+watch(
+  [
+    fontSize,
+    headingFontSize,
+    maxHeight,
+    readerWidth,
+    flag_high_level_paged_engine,
+    flag_single_page_mode,
+  ],
+  () => {
+    showPage(); // 页面更新
+  },
+);
 
 const cloneHTMLElementList = (elements: HTMLElement[]): HTMLElement[] =>
   elements.map((el) => el.cloneNode(true) as HTMLElement);
@@ -458,7 +536,100 @@ const initReader = () => {
   readerContainer.value.id = 'content-container';
   readerContainer.value.style.visibility = 'hidden';
   readerContainer.value.style.width = `${readerWidth.value}px`;
+  // 注入 CSS 样式，限制图片高度
+  const style = document.createElement('style');
+  style.textContent = `
+    img {
+      max-height: 100%; /* 图片最大高度不超过容器 */
+      max-width: 100%; /* 图片宽度自适应容器 */
+      object-fit: contain; /* 等比缩放 */
+    }
+    illus {
+      max-height: 100%; /* 图片最大高度不超过容器 */
+      max-width: 100%; /* 图片宽度自适应容器 */
+      object-fit: contain; /* 等比缩放 */
+    }
+    duokan-image-single {
+      max-height: 100%; /* 图片最大高度不超过容器 */
+      max-width: 100%; /* 图片宽度自适应容器 */
+      object-fit: contain; /* 等比缩放 */
+    }
+  `;
+  shadowRoot.value.appendChild(style);
   shadowRoot.value.appendChild(readerContainer.value);
+};
+
+function ensureCompleteHTML(htmlText: string) {
+  // 确保输入是字符串
+  if (typeof htmlText !== 'string') {
+    throw new Error('Input must be a string');
+  }
+
+  const hasHtmlTag = /<html[\s\S]*?>/i.test(htmlText);
+  const hasHeadTag = /<head[\s\S]*?>/i.test(htmlText);
+  const hasBodyTag = /<body[\s\S]*?>/i.test(htmlText);
+
+  // 如果没有 <html> 标签
+  if (!hasHtmlTag) {
+    // 检查是否包含其他 HTML 标签
+    const containsHTMLTags = /<\w+[\s\S]*?>/i.test(htmlText);
+
+    if (containsHTMLTags) {
+      // 如果包含其他 HTML 标签，则包裹在 <html> 和 <body> 中
+      htmlText = `<!DOCTYPE html><html><head></head><body>${htmlText}</body></html>`;
+    } else {
+      // 如果没有任何标签，直接补全空的 HTML 结构
+      htmlText = `<!DOCTYPE html><html><head></head><body>${htmlText}</body></html>`;
+    }
+  } else {
+    // 如果有 <html>，但没有 <head>
+    if (!hasHeadTag) {
+      if (hasBodyTag) {
+        // 有 <body> 的情况，在 <body> 前补充 <head>
+        htmlText = htmlText.replace(/<body[\s\S]*?>/i, (match) => `<head></head>${match}`);
+      } else {
+        // 没有 <body> 的情况，在 <html> 后插入 <head> 和 <body>
+        htmlText = htmlText.replace(/<html[\s\S]*?>/i, (match) => `${match}<head></head><body>`);
+        htmlText += '</body>';
+      }
+    }
+
+    // 如果没有 <body>，在 </head> 后插入 <body>
+    if (!hasBodyTag) {
+      htmlText = htmlText.replace(/<\/head>/i, (match) => `${match}<body>`);
+      htmlText += '</body>'; // 补充 <body> 尾
+    }
+  }
+
+  // 确保 </html> 在文档的最后
+  if (!/<\/html>$/i.test(htmlText)) {
+    htmlText += '</html>';
+  }
+
+  return htmlText;
+}
+
+const parseHTML = (text: string) => {
+  // 这个东西在目前环境下不太靠谱
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'text/html');
+
+  // 检查是否存在解析错误
+  if (!doc.querySelector('parsererror')) {
+    return doc; // 成功解析，返回整个 DOM 树
+  }
+
+  // 如果解析失败，使用 innerHTML 方法作为回退
+  console.warn('DOMParser failed, falling back to innerHTML.');
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = text;
+
+  // 包装成一个类似 DOM 树的文档结构
+  const fallbackDoc = document.implementation.createHTMLDocument('');
+  // fallbackDoc.body.append(...tempDiv.childNodes); // 将子节点复制到文档中
+  fallbackDoc.body.append(...Array.from(tempDiv.childNodes));
+
+  return fallbackDoc; // 返回整个回退的 DOM 树
 };
 
 const loadContent = async (url: string): Promise<void> => {
@@ -468,11 +639,13 @@ const loadContent = async (url: string): Promise<void> => {
     if (!response.ok) {
       throw new Error(`Failed to fetch content: ${response.status} ${response.statusText}`);
     }
-    const text = await response.text();
+    let text = await response.text();
+    text = ensureCompleteHTML(text);
 
     // 解析 HTML
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/html');
+    // const parser = new DOMParser();
+    // const doc = parser.parseFromString(text, 'text/html');
+    const doc = parseHTML(text);
 
     // 更新页面标题
     const title = doc.querySelector('title')?.innerText;
@@ -511,7 +684,7 @@ const loadContent = async (url: string): Promise<void> => {
 
     // 克隆 DOM 并展平为元素列表
     const clonedContent = readerContainer.value.cloneNode(true) as HTMLElement;
-    rawElements.value = flattenDOM(clonedContent);
+    rawElements.value = flattenDOM(clonedContent, flag_flatten_DOM.value);
   } catch (error) {
     console.error('加载内容失败:', error);
     console.error(error);
