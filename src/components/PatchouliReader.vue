@@ -39,12 +39,15 @@
 import { onMounted, onBeforeUnmount, ref, computed, nextTick, watch, provide } from 'vue';
 import FloatingControls from '@/components/FloatingControls.vue';
 
+const globalTestDivCounter = ref(0);
+const rawDOMtree = ref<HTMLElement>();
 const rawElements = ref<HTMLElement[]>(); // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
 // let rawElements: undefined | HTMLElement[] = undefined; // 原始html内容 这里面不知道为什么开启高级切分器后有可能进屎
 const pages = ref<HTMLElement[][]>([]); // 页面的元素数组，每页元素为 HTMLElement 数组
 const currentPage = ref(0);
 const maxHeight = ref(600); // 单页最大高度
 const readerWidth = ref(0);
+const last_reader_width = ref(0);
 const fontSize = ref(16); // 正文字体大小（默认16px）
 const headingFontSize = ref(24); // 各级标题的字体大小（默认24px）
 const shadowRoot = ref<ShadowRoot>(); // Shadow DOM 根元素
@@ -58,7 +61,7 @@ const touchStartX = ref(0);
 const touchEndX = ref(0);
 const touchStartTime = ref<number | null>(null); // 记录触摸开始时间
 const LONG_PRESS_THRESHOLD = ref(500); // 长按阈值（毫秒）
-
+const resizeObserver = ref<ResizeObserver>();
 const totalPages = computed(() => pages.value.length);
 const displayReadProgress = computed(() => readProgress.value * 100);
 
@@ -83,31 +86,44 @@ provide('PatchouliReader_onReaderClick', onReaderClick);
 const handleResize = () => {
   if (patchouliReader.value) {
     readerWidth.value = patchouliReader.value.offsetWidth;
+    last_reader_width.value = readerWidth.value;
     maxHeight.value = patchouliReader.value.offsetHeight;
   }
 };
 
 // 点击翻页处理函数
 const handleClick = (event: MouseEvent) => {
+  if (!patchouliReader.value) return; // 如果组件未挂载，直接返回
+
   // 检查是否存在选中的文本
   const selection = window.getSelection();
   if (selection && selection.toString().length > 0) {
     return; // 如果有选中文本，则忽略点击事件
   }
 
-  const clickX = event.clientX;
-  const screenWidth = window.innerWidth;
-  const edgeWidth = screenWidth * 0.2; // 边缘区域为 20%
+  // 获取组件的位置和大小
+  const rect = patchouliReader.value.getBoundingClientRect();
 
-  if (clickX < edgeWidth) {
+  // 获取点击位置相对于组件的坐标
+  const clickXInComponent = event.clientX - rect.left;
+  console.log('clickX:', event.clientX);
+  console.log('clickXInComponent:', clickXInComponent);
+
+  const edgeWidth = rect.width * 0.2; // 边缘区域为组件宽度的 20%
+
+  // 判断点击位置是否在左侧边缘区域
+  if (clickXInComponent < edgeWidth) {
     prevPage(); // 点击左侧20%区域
-  } else if (clickX > screenWidth - edgeWidth) {
+  }
+  // 判断点击位置是否在右侧边缘区域
+  else if (clickXInComponent > rect.width - edgeWidth) {
     nextPage(); // 点击右侧20%区域
-  } else {
+  }
+  // 如果点击位置在中间部分
+  else {
     onReaderClick.value = true; // 非边缘区域点击
   }
 };
-
 const handleWheel = (event: WheelEvent) => {
   if (flag_single_page_mode.value !== true) {
     //鼠标滚轮事件
@@ -186,62 +202,67 @@ const getParentTextContent = (element: HTMLElement): string => {
 };
 
 const flattenDOM = (
-  node: Node,
+  node: HTMLElement,
   flattenCompletely: boolean,
   parentClassPath = '',
 ): HTMLElement[] => {
   const elements: HTMLElement[] = [];
+  if (flag_flatten_DOM.value === false || flag_single_page_mode.value) {
+    elements.push(node);
+    return elements;
+  } else {
+    node.childNodes.forEach((child) => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const element = child as HTMLElement;
 
-  node.childNodes.forEach((child) => {
-    if (child.nodeType === Node.ELEMENT_NODE) {
-      const element = child as HTMLElement;
-
-      // 如果当前元素是 <ruby> 元素，直接保留
-      if (element.nodeName === 'RUBY') {
-        elements.push(element);
-        return;
-      }
-
-      // 如果没有子元素，跳过展平，直接保留该元素
-      if (!element.childNodes.length) {
-        elements.push(element);
-        return;
-      }
-
-      // 如果子元素只有 <ruby> 元素，保留 <ruby> 元素及其结构
-      const hasOnlyRubyChild = Array.from(element.childNodes).every(
-        (childNode) => childNode.nodeName === 'RUBY',
-      );
-
-      if (hasOnlyRubyChild) {
-        elements.push(element);
-        return;
-      }
-
-      if (flattenCompletely) {
-        // 处理完全展平逻辑
-        const currentClass = (node as HTMLElement).className || '';
-        const sanitizedClass = currentClass.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
-
-        const classPath = parentClassPath
-          ? `${parentClassPath}__${sanitizedClass}`
-          : sanitizedClass;
-
-        if (classPath) {
-          element.className = `${element.className} parent-${classPath}`;
+        // 如果当前元素是 <ruby> 元素，直接保留
+        if (element.nodeName === 'RUBY') {
+          elements.push(element);
+          return;
         }
 
-        const clonedElement = element.cloneNode(false) as HTMLElement; // 浅克隆移除子节点
-        clonedElement.innerText = getParentTextContent(element);
-        elements.push(clonedElement);
-        elements.push(...flattenDOM(element, flattenCompletely, classPath));
-      } else {
-        // 保留嵌套关系，仅添加母节点本身
-        elements.push(element);
-      }
-    }
-  });
+        // 如果没有子元素，跳过展平，直接保留该元素
+        if (!element.childNodes.length) {
+          elements.push(element);
+          return;
+        }
 
+        // 如果子元素只有 <ruby> 元素，保留 <ruby> 元素及其结构
+        const hasOnlyRubyChild = Array.from(element.childNodes).every(
+          (childNode) => childNode.nodeName === 'RUBY',
+        );
+
+        if (hasOnlyRubyChild) {
+          elements.push(element);
+          return;
+        }
+
+        if (flattenCompletely) {
+          // 处理完全展平逻辑
+          const currentClass = (node as HTMLElement).className || '';
+          const sanitizedClass = currentClass
+            .replace(/[^a-zA-Z0-9_-]/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+          const classPath = parentClassPath
+            ? `${parentClassPath}__${sanitizedClass}`
+            : sanitizedClass;
+
+          if (classPath) {
+            element.className = `${element.className} parent-${classPath}`;
+          }
+
+          const clonedElement = element.cloneNode(false) as HTMLElement; // 浅克隆移除子节点
+          clonedElement.innerText = getParentTextContent(element);
+          elements.push(clonedElement);
+          elements.push(...flattenDOM(element, flattenCompletely, classPath));
+        } else {
+          // 保留嵌套关系，仅添加母节点本身
+          elements.push(element);
+        }
+      }
+    });
+  }
   return elements;
 };
 const cloneElementStyleAndClass = (element: HTMLElement): HTMLElement => {
@@ -382,7 +403,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
 };
 
 const renderPage = (pageIndex: number) => {
-  const contentContainer = shadowRoot.value?.querySelector('#content-container') as HTMLElement;
+  const contentContainer = <HTMLElement>readerContainer.value;
   contentContainer.innerHTML = '';
   if (pages.value === undefined) return;
   const subPage = pages.value[pageIndex];
@@ -455,7 +476,16 @@ watch(
     showPage(); // 页面更新
   },
 );
-
+// 使用 ResizeObserver 监控元素的尺寸变化
+const updateWidth = () => {
+  if (patchouliReader.value) {
+    readerWidth.value = patchouliReader.value.offsetWidth;
+    if (last_reader_width.value !== readerWidth.value) {
+      console.log('阅读器宽度改变');
+    }
+    console.log('Element Width:', readerWidth.value);
+  }
+};
 const cloneHTMLElementList = (elements: HTMLElement[]): HTMLElement[] =>
   elements.map((el) => el.cloneNode(true) as HTMLElement);
 
@@ -465,7 +495,15 @@ const showPage = (pageIndex?: number) => {
   adjustFontSize();
   hiddenContainer.value.style.width = `${readerWidth.value}px`;
   readerContainer.value.style.width = `${readerWidth.value}px`;
+  if (flag_single_page_mode.value) {
+    pageIndex = 0;
+    readerContainer.value.style.height = 'auto';
+  } else {
+    console.log(`${maxHeight.value}px`);
+    readerContainer.value.style.height = `${maxHeight.value}px`;
+  }
   // pages.value = getPages(rawElements.value as HTMLElement[]);
+  rawElements.value = flattenDOM(<HTMLElement>rawDOMtree.value, flag_flatten_DOM.value);
   const temp = cloneHTMLElementList(rawElements.value as HTMLElement[]);
   pages.value = getPages(temp);
   if (pageIndex === undefined && flag_single_page_mode.value != true) {
@@ -479,9 +517,7 @@ const showPage = (pageIndex?: number) => {
       pageIndex = 0;
     }
   }
-  if (flag_single_page_mode.value) {
-    pageIndex = 0;
-  }
+
   if (pageIndex === undefined) {
     pageIndex = 0;
     console.log('在计算页码的时候未覆盖了');
@@ -520,7 +556,95 @@ const deepClone = <T,>(obj: T): T => {
   return obj;
 };
 
-const initReader = () => {
+/**
+ * 等待 CSS 应用完成
+ * 通过注入并检测CSS元素是否对测试DIV生效的方法来同步css和js引擎
+ * @param shadowRoot
+ * @param cssRules
+ * @param originalSize
+ * @param timeout
+ * @param interval
+ */
+const waitForCSSApplication = (
+  shadowRoot: ShadowRoot,
+  cssRules: string,
+  originalSize = '16px',
+  timeout = 3000,
+  interval = 50,
+): Promise<boolean> => {
+  return new Promise((resolve, reject) => {
+    // 获取当前计数并分配唯一 ID
+    const currentCounter = globalTestDivCounter.value++;
+    const uniqueId = `__test_div_${currentCounter}__`;
+
+    // 检查是否已存在同名元素，避免冲突
+    if (shadowRoot.querySelector(`#${uniqueId}`)) {
+      reject(new Error(`Element with ID '${uniqueId}' already exists in ShadowRoot.`));
+      globalTestDivCounter.value--; // 回收计数
+      return;
+    }
+
+    // 创建测试容器
+    const testDiv = document.createElement('div');
+    testDiv.id = uniqueId;
+    testDiv.style.fontSize = originalSize;
+    testDiv.style.position = 'absolute';
+    testDiv.innerText = '__TEST_DIV__';
+    testDiv.style.visibility = 'hidden';
+    shadowRoot.appendChild(testDiv);
+
+    // 注入 CSS 样式
+    const styleElement = document.createElement('style');
+    styleElement.textContent = cssRules.replace(/#test-div/g, `#${uniqueId}`);
+    shadowRoot.appendChild(styleElement);
+
+    // 开始轮询检测
+    const startTime = Date.now();
+    const checkFontSize = () => {
+      const appliedSize = getComputedStyle(testDiv).fontSize;
+
+      if (appliedSize !== originalSize) {
+        // 样式已生效
+        shadowRoot.removeChild(testDiv);
+        shadowRoot.removeChild(styleElement);
+        globalTestDivCounter.value--; // 回收计数
+        resolve(true);
+      } else if (Date.now() - startTime > timeout) {
+        // 超时
+        shadowRoot.removeChild(testDiv);
+        shadowRoot.removeChild(styleElement);
+        globalTestDivCounter.value--; // 回收计数
+        reject(new Error('CSS application timeout'));
+      } else {
+        // 继续检测
+        setTimeout(checkFontSize, interval);
+      }
+    };
+
+    checkFontSize();
+  });
+};
+
+/**
+ * 初始化并等待CSS与JS同步
+ * @param shadowRoot
+ */
+const initAndTestCSSApplication = async (shadowRoot: ShadowRoot): Promise<void> => {
+  try {
+    const cssRules = `
+      #test-div {
+          font-size: 50px !important; /* 新的字体大小 */
+      }
+    `;
+    //! 通过注入并检测CSS元素是否对测试DIV生效的方法来同步css和js引擎
+    await waitForCSSApplication(shadowRoot, cssRules);
+    console.log('CSS 已成功应用！');
+  } catch (error) {
+    console.error('CSS 应用失败：', error);
+  }
+};
+
+const initReader = async () => {
   if (patchouliContent.value === undefined) return;
   shadowRoot.value = patchouliContent.value.attachShadow({ mode: 'open' });
   hiddenContainer.value = document.createElement('div');
@@ -543,6 +667,8 @@ const initReader = () => {
       max-height: 100%; /* 图片最大高度不超过容器 */
       max-width: 100%; /* 图片宽度自适应容器 */
       object-fit: contain; /* 等比缩放 */
+      margin: 0 auto;
+      display: block;
     }
     illus {
       max-height: 100%; /* 图片最大高度不超过容器 */
@@ -557,6 +683,8 @@ const initReader = () => {
   `;
   shadowRoot.value.appendChild(style);
   shadowRoot.value.appendChild(readerContainer.value);
+  await initAndTestCSSApplication(shadowRoot.value);
+  return Promise.resolve();
 };
 
 function ensureCompleteHTML(htmlText: string) {
@@ -678,16 +806,22 @@ const loadContent = async (url: string): Promise<void> => {
       throw new Error('readerContainer 未初始化');
     }
 
-    // 设置内容到阅读容器
-    const bodyContent = doc.querySelector('body')?.innerHTML || '';
-    readerContainer.value.innerHTML = bodyContent;
+    // 创建一个空白的 div 容器
+    const tempContainer = document.createElement('div');
 
-    // 克隆 DOM 并展平为元素列表
-    const clonedContent = readerContainer.value.cloneNode(true) as HTMLElement;
-    rawElements.value = flattenDOM(clonedContent, flag_flatten_DOM.value);
+    // 设置内容到空白 div
+    const bodyContent = doc.querySelector('body')?.innerHTML || '';
+    tempContainer.innerHTML = bodyContent;
+
+    // 克隆空白 div 并展平为元素列表
+    rawDOMtree.value = tempContainer.cloneNode(true) as HTMLElement;
+    rawElements.value = flattenDOM(rawDOMtree.value, flag_flatten_DOM.value);
+    await initAndTestCSSApplication(<ShadowRoot>shadowRoot.value);
+    return Promise.resolve();
   } catch (error) {
     console.error('加载内容失败:', error);
     console.error(error);
+    return Promise.resolve();
   }
 };
 
@@ -703,8 +837,12 @@ onMounted(async () => {
     }
     window.addEventListener('resize', handleResize);
     window.addEventListener('wheel', handleWheel);
+    resizeObserver.value = new ResizeObserver(updateWidth);
+    if (patchouliReader.value) {
+      resizeObserver.value.observe(patchouliReader.value);
+    }
     nextTick(() => {
-      showPage(0); //显示首页 不知道为什么 第一次预渲染不吃css
+      showPage(0); //显示首页
     });
   });
 });
@@ -712,6 +850,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   window.removeEventListener('wheel', handleWheel);
+  if (resizeObserver.value !== undefined) resizeObserver.value.disconnect();
 });
 </script>
 
@@ -722,6 +861,15 @@ onBeforeUnmount(() => {
   flex-direction: column; /* 垂直排列子元素 */
   height: 100%; /* 让 #reader-app 占满父容器的高度 */
   width: 90%; /* 让 #reader-app 占满父容器的宽度 */
+
+  /* justify-content: center; 垂直居中 */
+  align-items: center; /* 水平居中 */
+}
+#patchouli-content {
+  display: flex; /* 使用 flexbox 布局 */
+  flex-direction: column; /* 垂直排列子元素 */
+  height: 100%; /* 让 #reader-app 占满父容器的高度 */
+  width: 100%; /* 让 #reader-app 占满父容器的宽度 */
 
   /* justify-content: center; 垂直居中 */
   align-items: center; /* 水平居中 */
