@@ -3,20 +3,22 @@
 <!-- <div style="text-align: center;">
   <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" alt="description" width="150" height="150">
 </div> -->
+  <!-- 文本 -->
+  <!-- <h1 style="
+       font-family: 'Gaegu', 'Noto Emoji', sans-serif; 
+       font-size: 80px; 
+       color: #efe0f7;">
+    Patchouli.js
+  </h1> -->
 
 <div style="display: flex; align-items: center; gap: 20px; justify-content: center; height: 200px;">
   <!-- 图片 -->
   <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" 
        alt="Description" 
        style="width: 150px; height: 150px;" />
-
-  <!-- 文本 -->
-  <h1 style="
-       font-family: 'Gaegu', 'Noto Emoji', sans-serif; 
-       font-size: 80px; 
-       color: #efe0f7;">
-    Patchouli.js
-  </h1>
+<img src="https://s1.imagehub.cc/images/2024/11/23/8990f2c35a138914b2693c4c672761a8.png" 
+       alt="Description" 
+       style="width: 360px; height: 60px;" />
 </div>
 
 <!-- Google Fonts -->
