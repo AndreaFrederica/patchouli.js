@@ -1,6 +1,28 @@
-# Patchouli.js
+<!-- # Patchouli.js -->
 
-![bak.png](https://img.picui.cn/free/2024/11/19/673b8ffe6e7f3.png)
+<!-- <div style="text-align: center;">
+  <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" alt="description" width="150" height="150">
+</div> -->
+
+<div style="display: flex; align-items: center; gap: 20px; justify-content: center; height: 200px;">
+  <!-- 图片 -->
+  <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" 
+       alt="Description" 
+       style="width: 150px; height: 150px;" />
+
+  <!-- 文本 -->
+  <h1 style="
+       font-family: 'Gaegu', 'Noto Emoji', sans-serif; 
+       font-size: 80px; 
+       color: #efe0f7;">
+    Patchouli.js
+  </h1>
+</div>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu&family=Noto+Color+Emoji&family=Noto+Emoji:wght@300..700&display=swap" rel="stylesheet">
 
 ## 简介
 
