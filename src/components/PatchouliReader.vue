@@ -364,11 +364,14 @@ const waitForResourceSync = (htmlElement: HTMLElement, timeout = 5000) => {
   return result // 返回最终状态
 }
 
+const hasOnlyText = (element: HTMLElement) =>
+  element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE
+
 // 最简单的高阶切分算法 没考虑div套娃 需要更多高级切分算法做补充
 const getParagraphs_Simple = (element: HTMLElement): [HTMLElement, HTMLElement] | undefined => {
   const part1 = cloneElementStyleAndClass(element)
   const part2 = cloneElementStyleAndClass(element)
-  if (element.hasChildNodes() || element.tagName.toLowerCase() === 'img') {
+  if (!hasOnlyText(element) || element.tagName.toLowerCase() === 'img') {
     return undefined
   }
 
@@ -411,6 +414,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   if (elements === undefined) return pages
   let flag_high_level_paged = false
   if (flag_single_page_mode.value) {
+    console.log('使用流式阅读器')
     // 单页流式阅读器
     elements.forEach((element) => {
       currentPage.push(element)
@@ -419,6 +423,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
     ;(hiddenContainer.value as HTMLElement).innerHTML = ''
     return pages
   } else if (flag_high_level_paged_engine.value) {
+    console.log('使用高阶分页引擎')
     let i = 0
     let end = elements.length
     while (i < end) {
@@ -476,6 +481,7 @@ const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
     return pages
   } else {
     // 最原始的老版本函数
+    console.log('使用低阶分页引擎')
     elements.forEach((element) => {
       hiddenContainer.value?.appendChild(element.cloneNode(true)) // 类型断言为 HTMLElement
       const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight
