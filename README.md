@@ -16,7 +16,7 @@
   <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" 
        alt="Description" 
        style="width: 150px; height: 150px;" />
-<img src="https://s1.imagehub.cc/images/2024/11/23/8990f2c35a138914b2693c4c672761a8.png" 
+<img src="https://s1.imagehub.cc/images/2024/11/23/61fdec4ace5670711d55156671145e51.png" 
        alt="Description" 
        style="width: 360px; height: 60px;" />
 </div>
