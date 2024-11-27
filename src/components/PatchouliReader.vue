@@ -409,98 +409,123 @@ const getParagraphs_Simple = (element: HTMLElement): [HTMLElement, HTMLElement] 
 }
 
 const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
-  const pages: HTMLElement[][] = []
-  let currentPage: HTMLElement[] = []
-  if (elements === undefined) return pages
-  let flag_high_level_paged = false
+  if (elements === undefined) return []
   if (flag_single_page_mode.value) {
     console.log('使用流式阅读器')
     // 单页流式阅读器
-    elements.forEach((element) => {
-      currentPage.push(element)
-    })
-    pages.push(currentPage)
-    ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-    return pages
+    return pagedEngineFlowing(elements, <HTMLElement>hiddenContainer.value)
   } else if (flag_high_level_paged_engine.value) {
     console.log('使用高阶分页引擎')
-    let i = 0
-    let end = elements.length
-    while (i < end) {
-      // if (flag_high_level_paged) i--; // i++最先计算 发生插入后需要用这个修正？
-      hiddenContainer.value?.appendChild(elements[i].cloneNode(true)) // 类型断言为 HTMLElement
-      const image_load_status = waitForResourceSync(elements[i], 10) // 等待图片加载
-      // 没有图片或加载成功为 success 失败为 error 或者timeout 这里需要优化 避免循环查找
-      let now_hight = (hiddenContainer.value as HTMLElement).scrollHeight
-      if (image_load_status !== 'success') {
-        console.warn('图片加载出现异常')
-        now_hight = maxHeight.value // 强行结束这一页
-      }
-      if (now_hight <= maxHeight.value * paging_threshold) {
-        // 能塞得进去 往这一页里面塞东西
-        currentPage.push(elements[i])
-        i++
-      } else {
-        // 碰撞测试失败 塞不进去 开始高级分页 或者结束一页
-        hiddenContainer.value?.removeChild(hiddenContainer.value.lastChild as HTMLElement) // 清理失败节点 给高级分页流出空间
-        let result = undefined // 性能优化 避免重复调用高级分页算法
-        if (flag_high_level_paged === false) result = getParagraphs_Simple(elements[i])
-        // console.log(flag_high_level_paged !== true && result !== undefined);
-        if (flag_high_level_paged !== true && result !== undefined) {
-          // 可以进行高级分页
-          flag_high_level_paged = true
-          currentPage.push(<HTMLElement>result[0].cloneNode(true))
-          elements.splice(i + 1, 0, <HTMLElement>result[1].cloneNode(true))
-          i++
-          end++
-        } else {
-          // 结束一页 高级分页失败了也会回退到这里
-          let flag_img = false
-          if (currentPage.length === 0) {
-            // 高级分页引擎也无法处理的东西 比如说图片
-            currentPage.push(elements[i])
-            flag_img = true
-            i++
-          }
-          if ((hiddenContainer.value as HTMLElement).scrollHeight !== 0 || flag_img === true) {
-            pages.push(currentPage)
-          } else {
-            console.log('存在空页 已剔除')
-          }
-          currentPage = []
-          ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-          flag_high_level_paged = false
-        }
-      }
-    }
-    if (currentPage.length > 0) {
-      // 最后一页
-      pages.push(currentPage)
-    }
-    ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-    return pages
+    return pagedEngineSourceGenHighLevel(elements, <HTMLElement>hiddenContainer.value)
   } else {
     // 最原始的老版本函数
     console.log('使用低阶分页引擎')
-    elements.forEach((element) => {
-      hiddenContainer.value?.appendChild(element.cloneNode(true)) // 类型断言为 HTMLElement
-      const elementHeight = (hiddenContainer.value as HTMLElement).scrollHeight
-      if (elementHeight > maxHeight.value * paging_threshold) {
-        pages.push(currentPage)
-        ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-        hiddenContainer.value?.appendChild(element.cloneNode(true))
-        currentPage = [element]
-      } else {
-        currentPage.push(element)
-      }
-    })
-    if (currentPage.length > 0) {
-      // 最后一页
-      pages.push(currentPage)
-    }
-    ;(hiddenContainer.value as HTMLElement).innerHTML = ''
-    return pages
+    return pagedEngineSourceGenLowLevel(elements, <HTMLElement>hiddenContainer.value)
   }
+}
+
+const pagedEngineFlowing = (
+  elements: HTMLElement[],
+  tester_container: HTMLElement,
+): HTMLElement[][] => {
+  const pages: HTMLElement[][] = []
+  const currentPage: HTMLElement[] = []
+  elements.forEach((element) => {
+    currentPage.push(element)
+  })
+  pages.push(currentPage)
+  tester_container.innerHTML = ''
+  return pages
+}
+
+const pagedEngineSourceGenHighLevel = (
+  elements: HTMLElement[],
+  tester_container: HTMLElement,
+): HTMLElement[][] => {
+  const pages: HTMLElement[][] = []
+  let currentPage: HTMLElement[] = []
+  let flag_high_level_paged = false
+  let i = 0
+  let end = elements.length
+  while (i < end) {
+    // if (flag_high_level_paged) i--; // i++最先计算 发生插入后需要用这个修正？
+    tester_container.appendChild(elements[i].cloneNode(true)) // 类型断言为 HTMLElement
+    const image_load_status = waitForResourceSync(elements[i], 10) // 等待图片加载
+    // 没有图片或加载成功为 success 失败为 error 或者timeout 这里需要优化 避免循环查找
+    let now_hight = tester_container.scrollHeight
+    if (image_load_status !== 'success') {
+      console.warn('图片加载出现异常')
+      now_hight = maxHeight.value // 强行结束这一页
+    }
+    if (now_hight <= maxHeight.value * paging_threshold) {
+      // 能塞得进去 往这一页里面塞东西
+      currentPage.push(elements[i])
+      i++
+    } else {
+      // 碰撞测试失败 塞不进去 开始高级分页 或者结束一页
+      tester_container.removeChild(tester_container.lastChild as HTMLElement) // 清理失败节点 给高级分页流出空间
+      let result = undefined // 性能优化 避免重复调用高级分页算法
+      if (flag_high_level_paged === false) result = getParagraphs_Simple(elements[i])
+      // console.log(flag_high_level_paged !== true && result !== undefined);
+      if (flag_high_level_paged !== true && result !== undefined) {
+        // 可以进行高级分页
+        flag_high_level_paged = true
+        currentPage.push(<HTMLElement>result[0].cloneNode(true))
+        elements.splice(i + 1, 0, <HTMLElement>result[1].cloneNode(true))
+        i++
+        end++
+      } else {
+        // 结束一页 高级分页失败了也会回退到这里
+        let flag_img = false
+        if (currentPage.length === 0) {
+          // 高级分页引擎也无法处理的东西 比如说图片
+          currentPage.push(elements[i])
+          flag_img = true
+          i++
+        }
+        if (tester_container.scrollHeight !== 0 || flag_img === true) {
+          pages.push(currentPage)
+        } else {
+          console.log('存在空页 已剔除')
+        }
+        currentPage = []
+        tester_container.innerHTML = ''
+        flag_high_level_paged = false
+      }
+    }
+  }
+  if (currentPage.length > 0) {
+    // 最后一页
+    pages.push(currentPage)
+  }
+  tester_container.innerHTML = ''
+  return pages
+}
+
+const pagedEngineSourceGenLowLevel = (
+  elements: HTMLElement[],
+  tester_container: HTMLElement,
+): HTMLElement[][] => {
+  const pages: HTMLElement[][] = []
+  let currentPage: HTMLElement[] = []
+  elements.forEach((element) => {
+    tester_container.appendChild(element.cloneNode(true)) // 类型断言为 HTMLElement
+    const elementHeight = tester_container.scrollHeight
+    if (elementHeight > maxHeight.value * paging_threshold) {
+      pages.push(currentPage)
+      tester_container.innerHTML = ''
+      tester_container.appendChild(element.cloneNode(true))
+      currentPage = [element]
+    } else {
+      currentPage.push(element)
+    }
+  })
+  if (currentPage.length > 0) {
+    // 最后一页
+    pages.push(currentPage)
+  }
+  tester_container.innerHTML = ''
+  return pages
 }
 
 const renderPage = (pageIndex: number) => {
@@ -624,7 +649,7 @@ const showPage = (pageIndex?: number) => {
     readerContainer.value.style.height = `${maxHeight.value}px`
   }
 
-  // pages.value = getPages(rawElements.value as HTMLElement[]);
+  // pages.value = getPages(rawElements.value as HTMLElement[])
   const temp = cloneHTMLElementList(rawElements.value as HTMLElement[])
   console.log('准备进行分页处理')
   pages.value = getPages(temp)
