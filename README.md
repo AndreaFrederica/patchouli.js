@@ -11,7 +11,7 @@
     Patchouli.js
   </h1> -->
 
-<div style="display: flex; align-items: center; gap: 20px; justify-content: center; height: 200px;">
+<div align=center>
   <!-- 图片 -->
   <img src="https://s1.imagehub.cc/images/2024/11/23/061628d0fab6b4699c2c7b58a57dcd2f.png" 
        alt="Description" 
