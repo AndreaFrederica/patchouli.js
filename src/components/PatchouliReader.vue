@@ -377,16 +377,23 @@ const hasOnlyText = (element: HTMLElement) =>
   element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE
 
 // 最简单的高阶切分算法 没考虑div套娃 需要更多高级切分算法做补充
-const getParagraphs_Simple = (element: HTMLElement): [HTMLElement, HTMLElement] | undefined => {
+const getParagraphs_Simple = (
+  element: HTMLElement,
+  pointer_div: HTMLElement | undefined = undefined,
+): [HTMLElement, HTMLElement] | undefined => {
   const part1 = cloneElementStyleAndClass(element)
   const part2 = cloneElementStyleAndClass(element)
   if (!hasOnlyText(element) || element.tagName.toLowerCase() === 'img') {
     return undefined
   }
-
+  let container: undefined | HTMLElement = undefined
   // 获取原始文本内容
   const text = element.innerText
-  const container = hiddenContainer.value as HTMLElement
+  if (pointer_div === undefined) {
+    container = hiddenContainer.value as HTMLElement
+  } else {
+    container = pointer_div
+  }
   // 将 part1 添加到隐藏容器中
   container.appendChild(part1)
   // 设置 part1 的内容，并进行分页检测
@@ -396,7 +403,10 @@ const getParagraphs_Simple = (element: HTMLElement): [HTMLElement, HTMLElement] 
     part1.innerText = part1Text // 设置 part1 的文本内容
 
     // 检查是否超过分页阈值
-    if (container.scrollHeight / maxHeight.value >= aggressive_paging_threshold) {
+    if (
+      (hiddenContainer.value as HTMLElement).scrollHeight / maxHeight.value >=
+      aggressive_paging_threshold
+    ) {
       // 超过阈值，分页结束
       break
     }
@@ -580,7 +590,9 @@ const pagedEnginePointerLowLevel = (
   const currentPage: HTMLElement[] = []
 
   elements.forEach((element) => {
-    pagedEnginePointerLowLevelCore(element, tester_container, pages, currentPage)
+    pagedEnginePointerLowLevelCore(element, tester_container, pages, currentPage, undefined, [
+      undefined,
+    ])
   })
 
   // 如果有剩余的元素未处理完，将其作为最后一页
@@ -596,24 +608,56 @@ const pagedEnginePointerLowLevelCore = (
   element: HTMLElement,
   tester_container: HTMLElement,
   pages_list: HTMLElement[][],
-  currentPage: HTMLElement[],
+  current_page: HTMLElement[],
+  div_template: HTMLElement | undefined,
+  pointer_div: [HTMLElement | undefined],
 ): void => {
+  let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
-    tester_container.appendChild(element.cloneNode(true))
+    if (current_page.length === 0 && pointer_div[0] === undefined) {
+      // 第一次调用时获取新的操作指针
+      const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+      tester_container.appendChild(neo_pointer)
+      pointer_div[0] = <HTMLElement>neo_pointer
+    }
+    ;(pointer_div[0] as HTMLElement).appendChild(element.cloneNode(true))
 
     if (tester_container.scrollHeight <= maxHeight.value * paging_threshold) {
-      currentPage.push(element)
+      // 什么都不做
     } else {
-      pages_list.push([...currentPage]) // 保存当前页
-      currentPage.length = 0 // 清空当前页，保留引用
+      ;(pointer_div[0] as HTMLElement).removeChild(
+        (pointer_div[0] as HTMLElement).lastChild as HTMLElement,
+      )
+      current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+      pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+      current_page.length = 0 // 清空当前页，保留引用
       tester_container.innerHTML = '' // 清空测试容器
-      tester_container.appendChild(element.cloneNode(true)) // 将当前元素添加到测试容器中
-      currentPage.push(element) // 开始新页
+      // 获取新的操作指针
+      const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+      tester_container.appendChild(neo_pointer)
+      pointer_div[0] = <HTMLElement>neo_pointer
+      neo_pointer.appendChild(element)
+      // current_page.push(<HTMLElement>neo_pointer) // 开始新页
     }
   } else {
+    if (div_template === undefined) {
+      //? 此元素是根元素 初始化div模板
+      next_div_template = cloneElementStyleAndClass(element)
+    } else {
+      // 不是根节点
+      const last_template = div_template.cloneNode(true)
+      next_div_template = last_template.appendChild(cloneElementStyleAndClass(element))
+    }
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
-        pagedEnginePointerLowLevelCore(node, tester_container, pages_list, currentPage)
+        pagedEnginePointerLowLevelCore(
+          node,
+          tester_container,
+          pages_list,
+          current_page,
+          next_div_template,
+          pointer_div,
+        )
       }
     })
   }
@@ -629,7 +673,7 @@ const pagedEnginePointerHighLevel = (
   const currentPage: HTMLElement[] = []
 
   // 包装一个对象来保存 part2
-  const savedPart2Container = { part2: null as HTMLElement | null }
+  const savedPart2Container = { part2: undefined as HTMLElement | undefined }
 
   elements.forEach((element) => {
     pagedEnginePointerHighLevelCore(
@@ -640,6 +684,8 @@ const pagedEnginePointerHighLevel = (
       maxHeight,
       paging_threshold,
       savedPart2Container, // 传递包装的 savedPart2
+      undefined,
+      [undefined],
     )
   })
 
@@ -657,49 +703,69 @@ const pagedEnginePointerHighLevelCore = (
   element: HTMLElement,
   tester_container: HTMLElement,
   pages_list: HTMLElement[][],
-  currentPage: HTMLElement[],
+  current_page: HTMLElement[],
   maxHeight: { value: number },
   paging_threshold: number,
-  savedPart2Container: { part2: HTMLElement | null }, // 保存 part2 的对象
+  savedPart2Container: { part2: HTMLElement | undefined }, // 保存 part2 的对象
+  div_template: HTMLElement | undefined,
+  pointer_div: [HTMLElement | undefined],
 ): void => {
   // 如果 savedPart2 存在，优先处理它
-  if (savedPart2Container.part2) {
-    processElement(
+  if (savedPart2Container.part2 !== undefined) {
+    console.log('存在part2 ')
+    pagedEnginePointerHighLevelCoreProcessElement(
       savedPart2Container.part2,
       tester_container,
       pages_list,
-      currentPage,
+      current_page,
       maxHeight,
       paging_threshold,
       savedPart2Container,
+      div_template,
+      pointer_div,
     )
-    return
+  } else {
+    // 正常分页处理
+    console.log('正常处理 ')
+    pagedEnginePointerHighLevelCoreProcessElement(
+      element,
+      tester_container,
+      pages_list,
+      current_page,
+      maxHeight,
+      paging_threshold,
+      savedPart2Container,
+      div_template,
+      pointer_div,
+    )
   }
-
-  // 正常分页处理
-  processElement(
-    element,
-    tester_container,
-    pages_list,
-    currentPage,
-    maxHeight,
-    paging_threshold,
-    savedPart2Container,
-  )
 }
 
-// 处理元素的具体分页逻辑
-const processElement = (
+//TODO 处理元素的具体分页逻辑 有问题 另外指针退化没修
+const pagedEnginePointerHighLevelCoreProcessElement = (
   element: HTMLElement,
   tester_container: HTMLElement,
   pages_list: HTMLElement[][],
-  currentPage: HTMLElement[],
+  current_page: HTMLElement[],
   maxHeight: { value: number },
   paging_threshold: number,
-  savedPart2Container: { part2: HTMLElement | null },
+  savedPart2Container: { part2: HTMLElement | undefined },
+  div_template: HTMLElement | undefined,
+  pointer_div: [HTMLElement | undefined],
 ): void => {
+  let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
-    tester_container.appendChild(element.cloneNode(true))
+    let flag_high_level_paged = false
+    // 标记Part2处理完成
+    savedPart2Container.part2 = undefined
+    if (current_page.length === 0 && pointer_div[0] === undefined) {
+      // 第一次调用时获取新的操作指针
+      const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+      tester_container.appendChild(neo_pointer)
+      pointer_div[0] = <HTMLElement>neo_pointer
+    }
+
+    ;(pointer_div[0] as HTMLElement).appendChild(element.cloneNode(true))
 
     const image_load_status = waitForResourceSync(element, 10) // 检测资源加载状态
     let now_height = tester_container.scrollHeight
@@ -711,35 +777,73 @@ const processElement = (
 
     if (now_height <= maxHeight.value * paging_threshold) {
       // 当前元素可以加入当前页
-      currentPage.push(element)
+      // 什么都不做
     } else {
       // 当前元素无法加入当前页
-      tester_container.removeChild(tester_container.lastChild as HTMLElement) // 回退操作
-
-      const result = getParagraphs_Simple(element) // 尝试高级分页
+      ;(pointer_div[0] as HTMLElement).removeChild(
+        (pointer_div[0] as HTMLElement).lastChild as HTMLElement,
+      )
+      let result = undefined // 性能优化 避免重复调用高级分页算法
+      if (flag_high_level_paged === false) result = getParagraphs_Simple(element, pointer_div[0])
       if (result !== undefined) {
         // 高级分页成功
+        flag_high_level_paged = true
         const [part1, part2] = result
 
         // 先处理 part1，保存 part2
-        tester_container.innerHTML = '' // 清空测试容器
-        currentPage.push(part1.cloneNode(true))
+        ;(pointer_div[0] as HTMLElement).appendChild(part1)
 
+        current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+        pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+
+        // 获取新的操作指针
+        current_page.length = 0
+        tester_container.innerHTML = ''
+        flag_high_level_paged = false
+        // 获取新的操作指针
+        const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+        tester_container.appendChild(neo_pointer)
+        pointer_div[0] = <HTMLElement>neo_pointer
         // 将 part2 保存到 container 中，便于后续处理
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
-        // 高级分页失败，直接结束当前页
-        if (currentPage.length === 0) {
-          currentPage.push(element) // 强行塞入当前元素
-        }
-        pages_list.push([...currentPage])
-        currentPage.length = 0
+        // 结束一页 高级分页失败了也会回退到这里
+
+        // let flag_img = false
+        // if ((pointer_div[0] as HTMLElement).classList === undefined) {
+        //   // 高级分页引擎也无法处理的东西 比如说图片
+        //   current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+        //   flag_img = true
+        // }
+        // if (tester_container.scrollHeight !== 0 || flag_img === true) {
+        //   pages_list.push(cloneHTMLElementList(current_page))
+        // } else {
+        //   console.log('存在空页 已剔除')
+        // }
+
+        current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+        pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+
+        // 获取新的操作指针
+        current_page.length = 0
         tester_container.innerHTML = ''
-        tester_container.appendChild(element.cloneNode(true)) // 开启新页
-        currentPage.push(element)
+        flag_high_level_paged = false
+        // 获取新的操作指针
+        const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+        tester_container.appendChild(neo_pointer)
+        pointer_div[0] = <HTMLElement>neo_pointer
+        // neo_pointer.appendChild(element)
       }
     }
   } else {
+    if (div_template === undefined) {
+      //? 此元素是根元素 初始化div模板
+      next_div_template = cloneElementStyleAndClass(element)
+    } else {
+      // 不是根节点
+      const last_template = div_template.cloneNode(true)
+      next_div_template = last_template.appendChild(cloneElementStyleAndClass(element))
+    }
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
         // 继续遍历子元素
@@ -747,20 +851,15 @@ const processElement = (
           node,
           tester_container,
           pages_list,
-          currentPage,
+          current_page,
           maxHeight,
           paging_threshold,
           savedPart2Container, // 传递 container 包装的 savedPart2
+          next_div_template,
+          pointer_div,
         )
       }
     })
-  }
-  // 如果 part2 已经处理完毕，重置 part2 为 null
-  if (
-    savedPart2Container.part2 &&
-    tester_container.scrollHeight <= maxHeight.value * paging_threshold
-  ) {
-    savedPart2Container.part2 = null
   }
 }
 

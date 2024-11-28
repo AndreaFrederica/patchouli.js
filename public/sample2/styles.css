@@ -1,0 +1,333 @@
+/*预设文本样式*/
+
+body{
+	padding: 0%;
+	margin-top: 0%;
+	margin-bottom: 0%;
+	margin-left: 1%;
+	margin-right: 1%;
+	line-height: 130%;
+	text-align: justify;
+}
+h1{
+	line-height: 120%;
+	text-align: center;
+	font-weight: bold;
+	font-size: 1.65em;
+	margin-top: 0.1em;
+	margin-bottom: 0.4em;
+}
+h2{
+	line-height: 120%;
+	text-align: center;
+	font-weight: bold;
+	font-size: 1.25em;
+	margin-top: 0.3em;
+	margin-bottom: 0.5em;
+}
+h3{
+	font-size: 0.95em;
+	line-height: 120%;
+	text-align: center;
+	text-indent: 0em;
+	font-weight: bold;
+	margin-top: 0.2em;
+	margin-bottom: 0.2em;
+}
+h4{
+	font-size: 1.5em;
+	text-align: center;
+	line-height: 1.2em;
+	text-indent: 0em;
+	font-weight: bold;
+	margin-top: 1em;
+	margin-bottom: 1.5em;
+}
+div{
+	margin: 0px;
+	padding: 0px;
+	text-align: justify;
+}
+p{
+	text-indent: 2em;
+	display: block;
+	line-height: 1.3em;
+	margin-top: 0.4em;
+	margin-bottom: 0.4em;
+  cssword-break: break-all;
+  word-wrap: break-word;
+  word-break: break-all;
+}
+
+
+
+
+/*图片相关*/
+
+.illus{
+	text-indent: 0em;
+	text-align: center;
+    display: block;
+}
+.cover{
+	margin: 0em;
+	padding: 0em;
+	text-indent: 0em;
+	text-align: center;
+}
+.coverborder{
+	border-style: none solid none solid;
+	border-color: #000000;
+	border-width: 1px;
+}
+
+
+
+
+/*logo相关*/
+
+.logo-img{
+	text-align: center;
+	margin-top: 30%;
+	margin-bottom: 1em;
+}
+.maker{
+	font-weight: bold;
+	text-indent: 0em;
+	text-align: center;
+}
+.logo-width{
+	width:100%;
+}
+.logo-font{
+    margin-top: -0.3em;
+	text-indent: 0em;
+}
+.cut-line{
+	text-indent: 0em;
+	line-height: 0%;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+}
+
+
+
+
+/*预设格式相关样式*/
+
+.right{
+	text-indent: 0em;
+	text-align: right;
+}
+.left{
+	text-indent: 0em;
+	text-align: left;
+}
+.center{
+	text-indent: 0em;
+    text-align: center;
+}
+.zin{
+    text-indent: 0em;
+}
+.bold{
+    font-weight: bold;
+}
+.stress{
+	font-weight: bold;
+	font-size: 1.1em;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+}
+.author{
+	font-size: 1.2em;
+	text-align: right;
+	font-weight: bold;
+	font-style: italic;
+	margin-right: 1em;
+}
+.dash-break{
+	word-break: break-all;
+	word-wrap: break-word;
+}
+.no-d{
+	text-decoration: none;
+}
+.bc{
+	border-collapse: collapse;
+}
+.dash-break{
+	word-break: break-all;
+	word-wrap: break-word;
+}
+.message{
+	text-indent: 0em;
+	line-height: 1.2em;
+	margin-top: 0.2em;
+	margin-bottom: 0.2em;
+}
+.meg{
+	font-size: 1.3em;
+	text-indent: 0em;
+	font-weight: bold;
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+
+
+
+
+/*文字大小*/
+
+.em05{
+    font-size: 0.5em;
+}
+.em06{
+    font-size: 0.6em;
+}
+.em07{
+    font-size: 0.7em;
+}
+.em08{
+    font-size: 0.8em;
+}
+.em09{
+    font-size: 0.9em;
+}
+.em11{
+    font-size: 1.1em;
+}
+.em12{
+    font-size: 1.2em;
+}
+.em13{
+    font-size: 1.3em;
+}
+.em14{
+    font-size: 1.4em;
+}
+.em15{
+    font-size: 1.5em;
+}
+.em16{
+    font-size: 1.6em;
+}
+.em17{
+    font-size: 1.7em;
+}
+.em18{
+    font-size: 1.8em;
+}
+.em19{
+    font-size: 1.9em;
+}
+.em20{
+    font-size: 2em;
+}
+
+
+
+
+/*预设目录样式*/
+
+.contents{
+	text-indent: 0em;
+	text-align: center;
+    border-bottom: 0.1em dotted #000000;
+    padding: 0.5em 0 0.4em 0;
+    margin-bottom: 0.7em;
+    font-weight: bold;
+}
+.mulu{
+	text-indent: 0em;
+	text-align: center;
+}
+
+
+
+
+/*预设title样式*/
+
+.title-width{
+    width: 100%;
+}
+.bb{
+    border-bottom: 3px solid #000000;
+}
+.blb{
+    border-left: 3px solid #000000;
+    border-bottom: 3px solid #000000;
+}
+.bl{
+    border-left: 3px solid #000000;
+}
+.br{
+    border-right: 3px solid #000000;
+}
+.brt{
+    border-right: 3px solid #000000;
+    border-top: 3px solid #000000;
+}
+.bt{
+    border-top: 3px solid #000000;
+}
+
+
+
+
+/*图片允许放大*/
+
+/*
+html代码：
+
+<div class="duokan-image-single illus"><img alt="图片名" src="../Images/图片名.jpg" /></div>
+*/
+
+
+
+
+/*预设注释样式*/
+
+.footnote {
+    height: 1.2em!important;
+    width: auto;
+    border:0;
+}
+.duokan-footnote {
+    height: 1.2em!important;
+    width: auto;
+    border: 0;
+}
+.duokan-footnote-item {
+    text-indent: 0em;
+    font-family: "DK-SONGTI";
+    text-shadow: 0em 0em 0.1em #000000;
+    font-size: 0.9em;
+    text-align: left;
+}
+sup {
+    font-size: 0.75em;
+    line-height: 1.2;
+    vertical-align: super!important;
+}
+/*
+html代码：
+
+<a class="duokan-footnote no-d" epub:type="noteref" href="#n1" id="A_1"><sup><img alt="note" class="footnote" src="../Images/note.png" /></sup></a>
+
+    <aside epub:type="footnote" id="n1">
+      <ol class="duokan-footnote-content">
+        <li class="duokan-footnote-item" id="n1" value="1">注：此处填写注释内容</li>
+      </ol>
+    </aside>
+
+代码说明：
+1. 请将「href="n1"」「id="n1"」「value="1"」这三段代码中的数字改为该注释的顺序
+例：第3个注释的该段代码为「href="n3"」「id="n3"」「value="3"」
+2. 「注：」根据不同情况可以改为其它文字，例如译者名
+*/
+
+
+
+
+/*以下填写自定义css样式*/
