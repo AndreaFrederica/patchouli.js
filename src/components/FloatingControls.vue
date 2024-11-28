@@ -18,7 +18,7 @@
         <div class="progress" :style="{ width: progress + '%' }"></div>
       </div>
       <div class="page-buttons">
-        <button @click.stop="prevPage" :disabled="currentPage === 0">Previous</button>
+        <button @click.stop="prevPage" :disabled="currentPage === 1">Previous</button>
         <button @click.stop="nextPage" :disabled="currentPage === totalPages">Next</button>
       </div>
     </div>
@@ -50,6 +50,7 @@
       <div class="mode-buttons">
         <button @click.stop="onPagedModeClick">{{ text_paged_mode_bottom }}</button>
         <button @click.stop="onViewModeClick">{{ text_view_mode_bottom }}</button>
+        <button @click.stop="onEngineModeClick">{{ text_engine_mode_bottom }}</button>
       </div>
       <!-- About Widget (图标和信息部分) -->
       <br />
@@ -59,11 +60,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch, type Ref } from 'vue';
-import AboutWidget from './AboutWidget.vue';
+import { computed, inject, ref, watch, type Ref } from 'vue'
+import AboutWidget from './AboutWidget.vue'
 
-const onReaderClick = inject('PatchouliReader_onReaderClick');
-const emit = defineEmits(['prev-page', 'next-page', 'switch-view-mode', 'switch-paged_engine']);
+const onReaderClick = inject('PatchouliReader_onReaderClick')
+const emit = defineEmits([
+  'prev-page',
+  'next-page',
+  'switch-view-mode',
+  'switch-paged_mode',
+  'switch-paged_engine',
+])
 const props = defineProps({
   currentPage: {
     type: Number,
@@ -85,59 +92,70 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
-});
+  enable_pointer_engine: {
+    type: Boolean,
+    required: true,
+  },
+})
 
-const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true });
-const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true });
-const isCollapsed = ref<boolean>(false); // 控制折叠状态
+const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true })
+const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true })
+const isCollapsed = ref<boolean>(false) // 控制折叠状态
 
 const text_paged_mode_bottom = computed(() =>
   props.enable_high_level_paged_engine === true ? 'HighLevelPagedEngine' : 'LowLevelPagedEngine',
-);
+)
 const text_view_mode_bottom = computed(() =>
   props.enable_single_page_mode === true ? 'SinglePage' : 'MultiPage',
-);
+)
+
+const text_engine_mode_bottom = computed(() =>
+  props.enable_pointer_engine === true ? 'Pointer' : 'SourceGen',
+)
 
 watch([onReaderClick as Ref<boolean>], () => {
   if ((onReaderClick as Ref<boolean>).value === true) {
-    toggleCollapse();
-    (onReaderClick as Ref<boolean>).value = false;
+    toggleCollapse()
+    ;(onReaderClick as Ref<boolean>).value = false
     // console.log("2222",(onReaderClick as Ref<boolean>).value)
     // 清标志位
   }
-});
+})
 
 const prevPage = () => {
-  emit('prev-page');
-};
+  emit('prev-page')
+}
 
 const nextPage = () => {
-  emit('next-page');
-};
+  emit('next-page')
+}
 
 const onViewModeClick = () => {
-  emit('switch-view-mode');
-};
+  emit('switch-view-mode')
+}
 
 const onPagedModeClick = () => {
-  emit('switch-paged_engine');
-};
+  emit('switch-paged_mode')
+}
+
+const onEngineModeClick = () => {
+  emit('switch-paged_engine')
+}
 
 const toggleCollapse = () => {
   // console.log("1111")
   // console.log("1111",(onReaderClick as Ref<boolean>).value)
-  isCollapsed.value = !isCollapsed.value; // 切换折叠状态
-};
+  isCollapsed.value = !isCollapsed.value // 切换折叠状态
+}
 </script>
 
 <style scoped>
-/*TODO 没居中*/
+/* 通用样式 */
 .floating-controls {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  /* transform: translate(20px, 20px); */
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.9); /* 默认浅色背景 */
   border-radius: 8px;
   padding: 10px;
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
@@ -145,19 +163,18 @@ const toggleCollapse = () => {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  width: auto;
+  width: 300px;
   height: auto;
-  transition: transform 0.3s ease; /* 添加动画效果 */
+  transition:
+    transform 0.3s ease,
+    background-color 0.3s ease; /* 添加背景色过渡效果 */
 }
 
 .floating-controls.collapsed {
-  /* transform: translate(1600%, 900%);折叠时移到右边 */
   bottom: 20px;
   right: 80px;
 }
 
-/* 更新后的浮动按钮样式 */
-/* 初始按钮样式 */
 .toggle-btn {
   position: fixed;
   top: 20px;
@@ -165,25 +182,24 @@ const toggleCollapse = () => {
   background-color: rgba(169, 169, 169, 0.5); /* 灰色且半透明 */
   color: white;
   border: none;
-  border-radius: 5px; /* 轻微圆角 */
+  border-radius: 5px;
   padding: 10px 20px;
   cursor: pointer;
   font-size: 16px;
-  z-index: 1001; /* 确保按钮在其他元素之上 */
-  transition: background-color 0.3s ease, opacity 0.3s ease; /* 添加平滑过渡 */
-  opacity: 0.7; /* 初始状态下按钮稍微透明 */
+  z-index: 1001;
+  transition:
+    background-color 0.3s ease,
+    opacity 0.3s ease;
+  opacity: 0.7;
 }
 
-/* 鼠标悬停时按钮样式 */
 .toggle-btn:hover {
   background-color: #4caf50; /* 绿色背景 */
-  opacity: 1; /* 取消透明度 */
+  opacity: 1;
 }
 
-
-
 .toggle-btn:focus {
-  outline: none; /* 去除焦点框 */
+  outline: none;
 }
 
 .pagination-panel,
@@ -201,7 +217,7 @@ const toggleCollapse = () => {
 .progress-bar {
   width: 100%;
   height: 5px;
-  background-color: #f0f0f0;
+  background-color: #f0f0f0; /* 浅色进度条背景 */
   border-radius: 3px;
   margin-bottom: 5px;
 }
@@ -223,6 +239,48 @@ const toggleCollapse = () => {
   border-radius: 3px;
 }
 
+.mode-buttons {
+  display: flex; /* 设置水平布局 */
+  flex-wrap: wrap; /* 小屏幕时允许换行 */
+  justify-content: center; /* 水平居中对齐 */
+  gap: 10px; /* 按钮之间的间距 */
+  margin: 10px 0; /* 增加与其他元素的间距 */
+}
+
+.mode-btn {
+  padding: 8px 15px; /* 调整按钮内边距 */
+  font-size: 14px; /* 调整字体大小 */
+  background-color: #499a97; /* 按钮背景色 */
+  color: white; /* 按钮文字颜色 */
+  border: none; /* 移除默认边框 */
+  border-radius: 5px; /* 圆角样式 */
+  cursor: pointer; /* 鼠标悬停时显示手型 */
+  transition:
+    background-color 0.3s ease,
+    transform 0.2s ease; /* 添加过渡动画 */
+}
+
+.mode-btn:hover {
+  background-color: #387e7b; /* 鼠标悬停时的背景色 */
+  transform: scale(1.05); /* 悬停时稍微放大 */
+}
+
+.mode-btn:active {
+  background-color: #285e5d; /* 点击时的背景色 */
+  transform: scale(0.95); /* 点击时稍微缩小 */
+}
+
+@media (max-width: 600px) {
+  .mode-buttons {
+    flex-direction: column; /* 小屏幕时垂直排列 */
+    align-items: center; /* 垂直居中对齐 */
+  }
+
+  .mode-btn {
+    width: 100%; /* 按钮在小屏幕上占满宽度 */
+  }
+}
+
 .mode-buttons button {
   padding: 5px 10px;
   margin: 0 5px;
@@ -241,5 +299,47 @@ const toggleCollapse = () => {
 
 .size-bar input {
   margin: 0 10px;
+}
+
+/* 暗模式样式 */
+@media (prefers-color-scheme: dark) {
+  .floating-controls {
+    background-color: rgba(45, 45, 45, 0.9); /* 暗模式背景 */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.8);
+  }
+
+  .toggle-btn {
+    background-color: rgba(100, 100, 100, 0.7); /* 按钮浅灰色背景 */
+    color: #f0f0f0; /* 按钮文字浅色 */
+  }
+
+  .toggle-btn:hover {
+    background-color: #3a7f3a; /* 深绿色 */
+  }
+
+  .pagination-info {
+    color: #f0f0f0; /* 浅色文字 */
+  }
+
+  .progress-bar {
+    background-color: #303030; /* 暗色进度条背景 */
+  }
+
+  .progress {
+    background-color: #81c784; /* 浅绿色 */
+  }
+
+  .page-buttons button {
+    background-color: #357a38; /* 深绿色 */
+  }
+
+  .mode-buttons button {
+    background-color: #276a68; /* 深蓝绿色 */
+  }
+
+  .size-bar label,
+  .size-bar span {
+    color: #f0f0f0; /* 浅色文字 */
+  }
 }
 </style>

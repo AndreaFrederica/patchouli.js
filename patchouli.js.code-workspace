@@ -25,6 +25,9 @@
 				"command": "extension.execute",
 				"priority": 4
 			}
+		],
+		"cSpell.words": [
+			"duokan"
 		]
 	}
 }
