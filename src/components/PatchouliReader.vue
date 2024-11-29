@@ -572,9 +572,7 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     return (
       child.nodeType === Node.TEXT_NODE ||
       (child.nodeType === Node.ELEMENT_NODE &&
-        (child.nodeName === 'IMG' ||
-          (child as HTMLElement).className === 'duokan-image-single' ||
-          child.nodeName === 'BR')) // 允许 BR 节点
+        (child.nodeName === 'IMG' || (child as HTMLElement).className === 'duokan-image-single'))
     )
   }
 
@@ -593,6 +591,11 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     return true
   } else if (Array.from(node.childNodes).every(isTextOrAllowedNode)) {
     // 只包含允许的节点类型
+    return true
+  } else if (node.nodeName === 'BR') {
+    // 单独的 BR 标签也视为叶子节点
+    return true
+  } else if (node.nodeName === 'P') {
     return true
   } else {
     return false
@@ -733,7 +736,7 @@ const pagedEnginePointerHighLevelCore = (
   pointer_div: [HTMLElement | undefined],
 ): void => {
   // 如果 savedPart2 存在，优先处理它
-  if (savedPart2Container.part2 !== undefined) {
+  while (savedPart2Container.part2 !== undefined) {
     // console.log('存在part2 ')
     pagedEnginePointerHighLevelCoreProcessElement(
       savedPart2Container.part2,
@@ -746,21 +749,20 @@ const pagedEnginePointerHighLevelCore = (
       div_template,
       pointer_div,
     )
-  } else {
-    // 正常分页处理
-    // console.log('正常处理 ')
-    pagedEnginePointerHighLevelCoreProcessElement(
-      element,
-      tester_container,
-      pages_list,
-      current_page,
-      maxHeight,
-      paging_threshold,
-      savedPart2Container,
-      div_template,
-      pointer_div,
-    )
   }
+  // 正常分页处理
+  // console.log('正常处理 ')
+  pagedEnginePointerHighLevelCoreProcessElement(
+    element,
+    tester_container,
+    pages_list,
+    current_page,
+    maxHeight,
+    paging_threshold,
+    savedPart2Container,
+    div_template,
+    pointer_div,
+  )
 }
 
 // 处理元素的具体分页逻辑
@@ -862,6 +864,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
       }
     }
   } else {
+    console.log(element)
     if (div_template === undefined) {
       //? 此元素是根元素 初始化div模板
       next_div_template = cloneElementStyleAndClass(element)
