@@ -48,10 +48,21 @@
     <div>
       <!-- 模式切换按钮 -->
       <div class="mode-buttons">
-        <button @click.stop="onPagedModeClick">{{ text_paged_mode_bottom }}</button>
-        <button @click.stop="onViewModeClick">{{ text_view_mode_bottom }}</button>
-        <button @click.stop="onEngineModeClick">{{ text_engine_mode_bottom }}</button>
+        <div class="row">
+          <button class="mode-btn" @click.stop="onPagedModeClick">
+            {{ text_paged_mode_bottom }}
+          </button>
+          <button class="mode-btn" @click.stop="onEngineModeClick">
+            {{ text_engine_mode_bottom }}
+          </button>
+        </div>
+        <div class="row">
+          <button class="mode-btn" @click.stop="onViewModeClick">
+            {{ text_view_mode_bottom }}
+          </button>
+        </div>
       </div>
+
       <!-- About Widget (图标和信息部分) -->
       <br />
       <AboutWidget />
@@ -103,7 +114,7 @@ const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true }
 const isCollapsed = ref<boolean>(false) // 控制折叠状态
 
 const text_paged_mode_bottom = computed(() =>
-  props.enable_high_level_paged_engine === true ? 'HighLevelPagedEngine' : 'LowLevelPagedEngine',
+  props.enable_high_level_paged_engine === true ? 'HighLevel' : 'LowLevel',
 )
 const text_view_mode_bottom = computed(() =>
   props.enable_single_page_mode === true ? 'SinglePage' : 'MultiPage',
@@ -237,37 +248,44 @@ const toggleCollapse = () => {
   color: white;
   border: none;
   border-radius: 3px;
+  width: 80px;
 }
 
 .mode-buttons {
-  display: flex; /* 设置水平布局 */
-  flex-wrap: wrap; /* 小屏幕时允许换行 */
-  justify-content: center; /* 水平居中对齐 */
+  display: flex;
+  flex-direction: column; /* 按行排列 */
+  align-items: center; /* 水平居中 */
+  gap: 10px; /* 行间距 */
+}
+
+.row {
+  display: flex;
+  justify-content: center; /* 每行中的按钮水平居中 */
   gap: 10px; /* 按钮之间的间距 */
-  margin: 10px 0; /* 增加与其他元素的间距 */
 }
 
 .mode-btn {
-  padding: 8px 15px; /* 调整按钮内边距 */
-  font-size: 14px; /* 调整字体大小 */
-  background-color: #499a97; /* 按钮背景色 */
-  color: white; /* 按钮文字颜色 */
-  border: none; /* 移除默认边框 */
-  border-radius: 5px; /* 圆角样式 */
-  cursor: pointer; /* 鼠标悬停时显示手型 */
-  transition:
+  padding: 8px 15px; /* 按钮内边距 */
+  font-size: 14px; /* 字体大小 */
+  background-color: #499a97; /* 背景色 */
+  color: white; /* 文字颜色 */
+  border: none; /* 移除边框 */
+  border-radius: 5px; /* 圆角 */
+  cursor: pointer; /* 鼠标样式 */
+  /* transition:
     background-color 0.3s ease,
-    transform 0.2s ease; /* 添加过渡动画 */
+    transform 0.2s ease; 动效 */
+  width: 100px;
 }
 
 .mode-btn:hover {
   background-color: #387e7b; /* 鼠标悬停时的背景色 */
-  transform: scale(1.05); /* 悬停时稍微放大 */
+  /* transform: scale(1.05); 悬停时稍微放大 */
 }
 
 .mode-btn:active {
   background-color: #285e5d; /* 点击时的背景色 */
-  transform: scale(0.95); /* 点击时稍微缩小 */
+  /* transform: scale(0.95); 点击时稍微缩小 */
 }
 
 @media (max-width: 600px) {

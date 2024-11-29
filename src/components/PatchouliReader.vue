@@ -408,7 +408,8 @@ const getParagraphs_Simple = (
       aggressive_paging_threshold
     ) {
       // 超过阈值，分页结束
-      container.removeChild(part1)
+      //TODO 不知道为什么这边不打补丁会发电
+      if (flag_use_pointer_engine.value) container.removeChild(part1)
       break
     }
   }
@@ -504,7 +505,7 @@ const pagedEngineSourceGenHighLevel = (
       let result = undefined // 性能优化 避免重复调用高级分页算法
       if (flag_high_level_paged === false) result = getParagraphs_Simple(elements[i])
       // console.log(flag_high_level_paged !== true && result !== undefined);
-      if (flag_high_level_paged !== true && result !== undefined) {
+      if (result !== undefined) {
         // 可以进行高级分页
         flag_high_level_paged = true
         currentPage.push(<HTMLElement>result[0].cloneNode(true))
