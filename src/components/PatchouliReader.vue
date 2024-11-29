@@ -129,8 +129,8 @@ const handleClick = (event: MouseEvent) => {
 
   // 获取点击位置相对于组件的坐标
   const clickXInComponent = event.clientX - rect.left
-  console.log('clickX:', event.clientX)
-  console.log('clickXInComponent:', clickXInComponent)
+  // console.log('clickX:', event.clientX)
+  // console.log('clickXInComponent:', clickXInComponent)
 
   const edgeWidth = rect.width * 0.2 // 边缘区域为组件宽度的 20%
 
@@ -1566,7 +1566,8 @@ onMounted(async () => {
       resizeObserver.value.observe(patchouliReader.value)
     }
   })
-  await loadContent('content.html') //! 加载内容
+  // await loadContent('content.html') //! 加载内容
+  await loadContent('sample2/text.xhtml') //! 加载内容
   // flag_single_page_mode.value = true
   // showPage(0) //显示首页
   // flag_single_page_mode.value = false

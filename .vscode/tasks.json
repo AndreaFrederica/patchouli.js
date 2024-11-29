@@ -1,0 +1,102 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // 开发任务 (Development)
+        {
+            "label": "Development: Start Dev Server",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "dev"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "detail": "启动 Vue 开发服务器"
+        },
+        // 构建任务 (Build)
+        {
+            "label": "Build: Build Project",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "build"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "detail": "构建 Vue 项目"
+        },
+        {
+            "label": "Build: Clean Dist Folder",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "clean"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "detail": "清理构建输出文件夹"
+        },
+        // 测试任务 (Test)
+        {
+            "label": "Test: Lint Code",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "lint"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "detail": "检查代码风格 (ESLint)"
+        },
+        {
+            "label": "Test: Run Unit Tests",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "test"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "detail": "运行单元测试"
+        },
+        // 其他任务 (Utility)
+        {
+            "label": "Utility: Install Dependencies",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "install"
+            ],
+            "group": {
+                "kind": "none",
+                "isDefault": false
+            },
+            "detail": "安装项目依赖"
+        },
+        {
+            "label": "Utility: Update Dependencies",
+            "type": "shell",
+            "command": "pnpm",
+            "args": [
+                "update"
+            ],
+            "group": {
+                "kind": "none",
+                "isDefault": false
+            },
+            "detail": "更新项目依赖"
+        }
+    ]
+}
