@@ -91,7 +91,7 @@ const aggressive_paging_threshold = 0.95 // 默认值为 0.9
 const paging_threshold = 0.95 // 默认值为 0.9
 const flag_flatten_DOM = ref(true)
 // 依赖展平dom树的方法来实现渲染
-// TODO 应当实现一个不依赖dom展平的分页器
+// TODO doing 应当实现一个不依赖dom展平的分页器 PointerEngine正在开发
 const flag_use_pointer_engine = ref(false)
 
 const flag_auto_next = ref(true)
@@ -408,6 +408,7 @@ const getParagraphs_Simple = (
       aggressive_paging_threshold
     ) {
       // 超过阈值，分页结束
+      container.removeChild(part1)
       break
     }
   }
@@ -565,17 +566,32 @@ const pagedEngineSourceGenLowLevel = (
 }
 
 const nodeIsLeaf = (node: HTMLElement): boolean => {
-  if (node.childNodes.length === 1 && node.childNodes[0].nodeType === Node.TEXT_NODE) {
-    //? 文本节点
+  const isTextOrAllowedNode = (child: Node): boolean => {
+    // 检测子节点是否为文本节点或特定允许的节点类型
+    return (
+      child.nodeType === Node.TEXT_NODE ||
+      (child.nodeType === Node.ELEMENT_NODE &&
+        (child.nodeName === 'IMG' ||
+          (child as HTMLElement).className === 'duokan-image-single' ||
+          child.nodeName === 'BR')) // 允许 BR 节点
+    )
+  }
+
+  // 检测当前节点是否为叶子节点
+  if (node.childNodes.length === 1 && isTextOrAllowedNode(node.childNodes[0])) {
+    // 单个文本节点或允许的类型
     return true
   } else if (node.nodeName === 'IMG') {
-    //? 图片节点
+    // 图片节点
     return true
   } else if (node.className === 'duokan-image-single') {
-    //? 多看图片节点
+    // 多看图片节点
     return true
   } else if (hasOnlyRubyChild(node)) {
-    //? 带注音的文本
+    // 带注音的文本
+    return true
+  } else if (Array.from(node.childNodes).every(isTextOrAllowedNode)) {
+    // 只包含允许的节点类型
     return true
   } else {
     return false
@@ -588,22 +604,27 @@ const pagedEnginePointerLowLevel = (
 ): HTMLElement[][] => {
   const pages: HTMLElement[][] = []
   const currentPage: HTMLElement[] = []
+  const pointer_div: [undefined | HTMLElement] = [undefined]
 
   elements.forEach((element) => {
-    pagedEnginePointerLowLevelCore(element, tester_container, pages, currentPage, undefined, [
+    pagedEnginePointerLowLevelCore(
+      element,
+      tester_container,
+      pages,
+      currentPage,
       undefined,
-    ])
+      pointer_div,
+    )
   })
 
   // 如果有剩余的元素未处理完，将其作为最后一页
-  //? 真的能被调用到吗？
-  if (currentPage.length > 0) {
-    pages.push([...currentPage])
+  if ((pointer_div[0] as HTMLElement).hasChildNodes) {
+    pages.push([(pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement])
   }
   tester_container.innerHTML = ''
   return pages
 }
-//? 实际上 Pointer都有过早结束的问题
+
 const pagedEnginePointerLowLevelCore = (
   element: HTMLElement,
   tester_container: HTMLElement,
@@ -674,6 +695,7 @@ const pagedEnginePointerHighLevel = (
 
   // 包装一个对象来保存 part2
   const savedPart2Container = { part2: undefined as HTMLElement | undefined }
+  const pointer_div: [undefined | HTMLElement] = [undefined]
 
   elements.forEach((element) => {
     pagedEnginePointerHighLevelCore(
@@ -685,14 +707,13 @@ const pagedEnginePointerHighLevel = (
       paging_threshold,
       savedPart2Container, // 传递包装的 savedPart2
       undefined,
-      [undefined],
+      pointer_div,
     )
   })
 
   // 如果最后有剩余的内容，保存到 pages
-  //? 真的能被调用到吗？
-  if (currentPage.length > 0) {
-    pages.push([...currentPage])
+  if ((pointer_div[0] as HTMLElement).hasChildNodes) {
+    pages.push([(pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement])
   }
 
   tester_container.innerHTML = '' // 清理测试容器
@@ -712,7 +733,7 @@ const pagedEnginePointerHighLevelCore = (
 ): void => {
   // 如果 savedPart2 存在，优先处理它
   if (savedPart2Container.part2 !== undefined) {
-    console.log('存在part2 ')
+    // console.log('存在part2 ')
     pagedEnginePointerHighLevelCoreProcessElement(
       savedPart2Container.part2,
       tester_container,
@@ -726,7 +747,7 @@ const pagedEnginePointerHighLevelCore = (
     )
   } else {
     // 正常分页处理
-    console.log('正常处理 ')
+    // console.log('正常处理 ')
     pagedEnginePointerHighLevelCoreProcessElement(
       element,
       tester_container,
@@ -741,7 +762,7 @@ const pagedEnginePointerHighLevelCore = (
   }
 }
 
-//TODO 处理元素的具体分页逻辑 有问题 另外指针退化没修
+// 处理元素的具体分页逻辑
 const pagedEnginePointerHighLevelCoreProcessElement = (
   element: HTMLElement,
   tester_container: HTMLElement,
@@ -756,8 +777,6 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
   let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
     let flag_high_level_paged = false
-    // 标记Part2处理完成
-    savedPart2Container.part2 = undefined
     if (current_page.length === 0 && pointer_div[0] === undefined) {
       // 第一次调用时获取新的操作指针
       const neo_pointer = (div_template as HTMLElement).cloneNode(true)
@@ -778,6 +797,10 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     if (now_height <= maxHeight.value * paging_threshold) {
       // 当前元素可以加入当前页
       // 什么都不做
+      if (savedPart2Container.part2 !== undefined) {
+        // 标记Part2处理完成
+        savedPart2Container.part2 = undefined
+      }
     } else {
       // 当前元素无法加入当前页
       ;(pointer_div[0] as HTMLElement).removeChild(
@@ -808,6 +831,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
         // 结束一页 高级分页失败了也会回退到这里
+        savedPart2Container.part2 = undefined
 
         // let flag_img = false
         // if ((pointer_div[0] as HTMLElement).classList === undefined) {
@@ -833,6 +857,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         tester_container.appendChild(neo_pointer)
         pointer_div[0] = <HTMLElement>neo_pointer
         // neo_pointer.appendChild(element)
+        savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
       }
     }
   } else {
@@ -972,6 +997,7 @@ const showPage = (pageIndex?: number) => {
   if (readerContainer.value === undefined) return
   if (cacheContainer.value === undefined) return
   if (rawDOMtree.value === undefined) return
+  readerContainer.value.style.visibility = 'hidden'
   adjustFontSize()
   console.log('字体大小注入完成')
   hiddenContainer.value.style.width = `${readerWidth.value}px`
@@ -1051,6 +1077,7 @@ const showPage = (pageIndex?: number) => {
   }
   currentPage.value = pageIndex
   // console.log(currentPage.value)
+  readerContainer.value.style.visibility = 'visible'
   renderPage(currentPage.value)
 }
 
