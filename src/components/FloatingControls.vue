@@ -114,7 +114,11 @@ const fontSize: Ref<number> = defineModel<number>('fontSize', { required: true }
 const isCollapsed = ref<boolean>(false) // 控制折叠状态
 
 const text_paged_mode_bottom = computed(() =>
-  props.enable_high_level_paged_engine === true ? 'HighLevel' : 'LowLevel',
+  props.enable_single_page_mode
+    ? 'Raw'
+    : props.enable_high_level_paged_engine
+      ? 'HighLevel'
+      : 'LowLevel',
 )
 const text_view_mode_bottom = computed(() =>
   props.enable_single_page_mode === true ? 'SinglePage' : 'MultiPage',

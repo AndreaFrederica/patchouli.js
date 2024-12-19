@@ -74,9 +74,11 @@ const touchStartX = ref(0)
 const touchEndX = ref(0)
 const touchStartTime = ref<number | null>(null) // 记录触摸开始时间
 const LONG_PRESS_THRESHOLD = ref(500) // 长按阈值（毫秒）
-const resizeObserver = ref<ResizeObserver>()
+
 const totalPages = computed(() => pages.value.length)
 const displayReadProgress = computed(() => readProgress.value * 100)
+
+const resizeObserver = ref<ResizeObserver>()
 
 // 高阶分页支持
 const flag_high_level_paged_engine = ref(true)
@@ -147,6 +149,7 @@ const handleClick = (event: MouseEvent) => {
     onReaderClick.value = true // 非边缘区域点击
   }
 }
+
 const handleWheel = (event: WheelEvent) => {
   if (flag_single_page_mode.value !== true) {
     //鼠标滚轮事件
@@ -583,9 +586,9 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
   } else if (node.nodeName === 'IMG') {
     // 图片节点
     return true
-  } else if (node.className === 'duokan-image-single') {
-    // 多看图片节点
-    return true
+    // } else if (node.className === 'duokan-image-single') {
+    //   // 多看图片节点
+    //   return true
   } else if (hasOnlyRubyChild(node)) {
     // 带注音的文本
     return true
@@ -596,6 +599,10 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     // 单独的 BR 标签也视为叶子节点
     return true
   } else if (node.nodeName === 'P') {
+    // 段落标签视为叶子节点
+    return true
+  } else if (/^H[1-6]$/.test(node.nodeName)) {
+    // 标题标签 (h1-h6) 视为叶子节点
     return true
   } else {
     return false
@@ -712,6 +719,7 @@ const pagedEnginePointerHighLevel = (
       savedPart2Container, // 传递包装的 savedPart2
       undefined,
       pointer_div,
+      element,
     )
   })
 
@@ -734,10 +742,14 @@ const pagedEnginePointerHighLevelCore = (
   savedPart2Container: { part2: HTMLElement | undefined }, // 保存 part2 的对象
   div_template: HTMLElement | undefined,
   pointer_div: [HTMLElement | undefined],
+  root_element: HTMLElement,
 ): void => {
+  let i = 0
   // 如果 savedPart2 存在，优先处理它
-  while (savedPart2Container.part2 !== undefined) {
+  while (savedPart2Container.part2 != undefined && i <= 100) {
     // console.log('存在part2 ')
+    // debugger
+    // console.log(savedPart2Container.part2)
     pagedEnginePointerHighLevelCoreProcessElement(
       savedPart2Container.part2,
       tester_container,
@@ -748,7 +760,12 @@ const pagedEnginePointerHighLevelCore = (
       savedPart2Container,
       div_template,
       pointer_div,
+      root_element,
     )
+    i += 1
+  }
+  if (i >= 100) {
+    console.error('元素递归溢出', savedPart2Container.part2)
   }
   // 正常分页处理
   // console.log('正常处理 ')
@@ -762,7 +779,109 @@ const pagedEnginePointerHighLevelCore = (
     savedPart2Container,
     div_template,
     pointer_div,
+    root_element,
   )
+}
+
+const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
+  // 1. 拆分路径为每个层级的标志 例如 /div[2]/p[1]/span[3]
+  const parts = path.split('/').filter(Boolean) // 移除空路径部分
+  let pointer = rootElement // 从指定的 rootElement 开始
+  // 2. 创建一个母div作为结果模板
+  const motherDiv = document.createElement('div') // 这是最外层的母 div
+  let currentParent = motherDiv // 当前生成的模板中的“父级”
+
+  parts.forEach((part) => {
+    console.log('templateGen path', part)
+    const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
+    if (match) {
+      console.log('templateGen path_detail', match)
+      const tagName = match[1].toLowerCase() // 获取标签名 例如 div
+      const index = parseInt(match[2], 10) // 获取索引 例如 2
+
+      // 仅在当前指针的子元素中查找目标标签
+      let counter = 0
+      let foundElement = null
+      for (let i = 0; i < pointer.children.length; i++) {
+        const child = pointer.children[i]
+        if (child.tagName.toLowerCase() === tagName) {
+          if (counter === index) {
+            foundElement = child
+            break
+          }
+        }
+        counter++
+      }
+
+      if (foundElement) {
+        pointer = <HTMLElement>foundElement // 将指针指向路径中的子元素
+        // 3. 使用 cloneElementStyleAndClass 函数克隆当前路径中的元素
+        const newElement = cloneElementStyleAndClass(pointer) // 只复制样式和类名，不复制子内容
+        currentParent.appendChild(newElement) // 将新元素插入到母模板中
+        currentParent = newElement // 将指针移动到下一级
+      } else {
+        throw new Error(
+          `Path error: No ${tagName}[${index}] found in ${pointer.tagName} div=${pointer}`,
+        )
+      }
+    }
+  })
+
+  return motherDiv // 返回整个母 div 作为结果
+}
+
+const getElementPath = (rootElement: HTMLElement, element: HTMLElement): string => {
+  let path = ''
+
+  // 不断向上遍历，直到到达 rootElement，或者 element 没有父级
+  while (element && element !== rootElement) {
+    const parent = element.parentElement
+
+    if (!parent) break // 防止空引用
+
+    // 计算当前元素在父元素中的索引位置
+    const index = Array.from(parent.children).indexOf(element)
+
+    // 获取当前元素的标签名，并生成路径部分
+    const tagName = element.tagName.toLowerCase()
+    path = `/${tagName}[${index}]` + path // 拼接路径
+
+    // 向上遍历，直到 rootElement
+    element = parent
+  }
+
+  return path
+}
+
+const cloneElementStyleAndClassWithPath = (element: HTMLElement): HTMLElement => {
+  // 1. 创建一个新的元素（与原始元素相同的标签类型）
+  const cloned = document.createElement(element.tagName) as HTMLElement
+
+  // 2. 复制原始元素的所有类名
+  if (element.className && element.className.trim() !== '') {
+    cloned.className = element.className
+  }
+
+  // 3. 复制原始元素的内联样式
+  if (element.style && element.style.cssText.trim() !== '') {
+    cloned.style.cssText = element.style.cssText
+  }
+
+  // 4. 复制原始元素的其他自定义属性（可根据需求调整）
+  Array.from(element.attributes).forEach((attr) => {
+    if (attr.name !== 'id' && attr.name !== 'class' && attr.name !== 'style') {
+      cloned.setAttribute(attr.name, attr.value)
+    }
+  })
+
+  // 5. 计算路径并将路径存储在 `data-path` 属性中
+  const path = getElementPath(element)
+  cloned.setAttribute('data-path', path)
+
+  // 6. 移除 id 属性，避免重复
+  cloned.removeAttribute('id')
+
+  return cloned
 }
 
 // 处理元素的具体分页逻辑
@@ -776,10 +895,13 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
   savedPart2Container: { part2: HTMLElement | undefined },
   div_template: HTMLElement | undefined,
   pointer_div: [HTMLElement | undefined],
+  root_element: HTMLElement,
 ): void => {
   let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
     let flag_high_level_paged = false
+    let flag_img = false
+
     if (current_page.length === 0 && pointer_div[0] === undefined) {
       // 第一次调用时获取新的操作指针
       const neo_pointer = (div_template as HTMLElement).cloneNode(true)
@@ -792,9 +914,11 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     const image_load_status = waitForResourceSync(element, 10) // 检测资源加载状态
     let now_height = tester_container.scrollHeight
 
-    if (image_load_status !== 'success') {
+    if (image_load_status === 'error') {
       console.warn('资源加载异常')
       now_height = maxHeight.value // 强行结束当前页
+      flag_high_level_paged = true
+      flag_img = true
     }
 
     if (now_height <= maxHeight.value * paging_threshold) {
@@ -834,48 +958,80 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
         // 结束一页 高级分页失败了也会回退到这里
+        console.log('debug', element)
         savedPart2Container.part2 = undefined
 
-        // let flag_img = false
-        // if ((pointer_div[0] as HTMLElement).classList === undefined) {
-        //   // 高级分页引擎也无法处理的东西 比如说图片
-        //   current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
-        //   flag_img = true
-        // }
-        // if (tester_container.scrollHeight !== 0 || flag_img === true) {
-        //   pages_list.push(cloneHTMLElementList(current_page))
-        // } else {
-        //   console.log('存在空页 已剔除')
-        // }
+        if ((pointer_div[0] as HTMLElement).classList === undefined) {
+          // 高级分页引擎也无法处理的东西 比如说图片
+          flag_img = true
+          console.warn('存在加载失败的图片')
+        }
+        if (element.tagName === 'IMG') {
+          flag_img = true
+        }
+        console.log('isPageHaveImage', flag_img)
+        if (tester_container.scrollHeight !== 0) {
+          current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+          pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
-        current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
-        pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+          current_page.length = 0
+          tester_container.innerHTML = ''
+          flag_high_level_paged = false
+          // 获取新的操作指针
+          const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+          tester_container.appendChild(neo_pointer)
+          pointer_div[0] = <HTMLElement>neo_pointer
+          // neo_pointer.appendChild(element)
+          savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
+        } else if (flag_img === true) {
+          // current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+          // pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
-        // 获取新的操作指针
-        current_page.length = 0
-        tester_container.innerHTML = ''
-        flag_high_level_paged = false
-        // 获取新的操作指针
-        const neo_pointer = (div_template as HTMLElement).cloneNode(true)
-        tester_container.appendChild(neo_pointer)
-        pointer_div[0] = <HTMLElement>neo_pointer
-        // neo_pointer.appendChild(element)
-        savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
+          // current_page.length = 0
+          // tester_container.innerHTML = ''
+          // flag_high_level_paged = false
+          // // 获取新的操作指针
+          // let neo_pointer = (div_template as HTMLElement).cloneNode(true)
+          // tester_container.appendChild(neo_pointer)
+          // pointer_div[0] = <HTMLElement>neo_pointer
+
+          ;(pointer_div[0] as HTMLElement).appendChild(element)
+          console.warn('div_template', div_template)
+
+          current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+          pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+
+          current_page.length = 0
+          tester_container.innerHTML = ''
+          flag_high_level_paged = false
+          // 获取新的操作指针
+          const neo_pointer = (div_template as HTMLElement).cloneNode(true)
+          tester_container.appendChild(neo_pointer)
+          pointer_div[0] = <HTMLElement>neo_pointer
+        } else {
+          console.log('存在空页 已剔除')
+          console.log(tester_container.scrollHeight)
+          console.log(pointer_div[0])
+          console.log(tester_container)
+        }
       }
     }
   } else {
-    console.log(element)
-    if (div_template === undefined) {
-      //? 此元素是根元素 初始化div模板
-      next_div_template = cloneElementStyleAndClass(element)
-    } else {
-      // 不是根节点
-      const last_template = div_template.cloneNode(true)
-      next_div_template = last_template.appendChild(cloneElementStyleAndClass(element))
-    }
+    console.log('element', element)
+    // if (div_template === undefined) {
+    //   const path = getElementPath(element)
+    //   console.log(path)
+    //   next_div_template = createTemplateByPath(root_element, path)
+    // } else {
+    //   const last_template = cloneElementStyleAndClassWithPath(div_template)
+    //   const current_path = getElementPath(element)
+    //   next_div_template = last_template.appendChild(createTemplateByPath(root_element, current_path))
+    // }
+    const path = getElementPath(root_element, element)
+    console.log('path', path)
+    next_div_template = createTemplateByPath(root_element, path)
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
-        // 继续遍历子元素
         pagedEnginePointerHighLevelCore(
           node,
           tester_container,
@@ -883,9 +1039,10 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           current_page,
           maxHeight,
           paging_threshold,
-          savedPart2Container, // 传递 container 包装的 savedPart2
+          savedPart2Container,
           next_div_template,
           pointer_div,
+          root_element,
         )
       }
     })
@@ -995,6 +1152,41 @@ const updateWidth = () => {
 const cloneHTMLElementList = (elements: HTMLElement[]): HTMLElement[] =>
   elements.map((el) => el.cloneNode(true) as HTMLElement)
 
+const updateCSS = () => {
+  if (shadowRoot.value === undefined) return
+  const style = shadowRoot.value.getElementById('base-css')
+  // style.id = 'base-css'
+  if (style === null) return
+  style.textContent = `
+    img {
+      max-height: ${maxHeight.value}px; /* 图片最大高度不超过容器 */
+      max-width: ${readerWidth.value}px; /* 图片宽度自适应容器 */
+      object-fit: contain; /* 等比缩放 */
+      margin: 0 auto;
+      display: block;
+    }
+  .illus {
+    max-height: 100%; /* 图片最大高度不超过容器 */
+    max-width: 100%; /* 图片宽度自适应容器 */
+    object-fit: contain; /* 等比缩放 */
+  }
+
+  .duokan-image-single {
+    max-height: 100%; /* 图片最大高度不超过容器 */
+    max-width: 100%; /* 图片宽度自适应容器 */
+    object-fit: contain; /* 等比缩放 */
+  }
+  div {
+    max-height: 100%; /* 图片最大高度不超过容器 */
+    max-width: 100%; /* 图片宽度自适应容器 */
+  }
+  div.illus, div.duokan-image-single {
+  max-height: 100%; /* 图片最大高度不超过容器 */
+  max-width: 100%; /* 图片宽度自适应容器 */
+}
+  `
+}
+
 const showPage = (pageIndex?: number) => {
   console.log('启动预渲染')
   if (hiddenContainer.value === undefined) return
@@ -1003,7 +1195,9 @@ const showPage = (pageIndex?: number) => {
   if (rawDOMtree.value === undefined) return
   readerContainer.value.style.visibility = 'hidden'
   adjustFontSize()
+  updateCSS()
   console.log('字体大小注入完成')
+
   hiddenContainer.value.style.width = `${readerWidth.value}px`
   readerContainer.value.style.width = `${readerWidth.value}px`
   cacheContainer.value.style.width = `${readerWidth.value}px`
@@ -1211,8 +1405,8 @@ const initReader = async () => {
   style.id = 'base-css'
   style.textContent = `
     img {
-      max-height: 100%; /* 图片最大高度不超过容器 */
-      max-width: 100%; /* 图片宽度自适应容器 */
+      max-height: ${maxHeight.value}px; /* 图片最大高度不超过容器 */
+      max-width: ${readerWidth.value}px; /* 图片宽度自适应容器 */
       object-fit: contain; /* 等比缩放 */
       margin: 0 auto;
       display: block;
@@ -1567,7 +1761,7 @@ onMounted(async () => {
     }
   })
   // await loadContent('content.html') //! 加载内容
-  await loadContent('sample2/text.xhtml') //! 加载内容
+  await loadContent('sample3.xhtml') //! 加载内容
   // flag_single_page_mode.value = true
   // showPage(0) //显示首页
   // flag_single_page_mode.value = false
