@@ -94,7 +94,7 @@ const paging_threshold = 0.95 // 默认值为 0.9
 const flag_flatten_DOM = ref(true)
 // 依赖展平dom树的方法来实现渲染
 // TODO doing 应当实现一个不依赖dom展平的分页器 PointerEngine正在开发
-const flag_use_pointer_engine = ref(false)
+const flag_use_pointer_engine = ref(true)
 
 const flag_auto_next = ref(true)
 // 允许自动切换章节
@@ -799,18 +799,17 @@ const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
       const tagName = match[1].toLowerCase() // 获取标签名 例如 div
       const index = parseInt(match[2], 10) // 获取索引 例如 2
 
-      // 仅在当前指针的子元素中查找目标标签
       let counter = 0
-      let foundElement = null
+      let foundElement: HTMLElement | null = null
       for (let i = 0; i < pointer.children.length; i++) {
         const child = pointer.children[i]
         if (child.tagName.toLowerCase() === tagName) {
           if (counter === index) {
-            foundElement = child
+            foundElement = child as HTMLElement
             break
           }
+          counter++
         }
-        counter++
       }
 
       if (foundElement) {
@@ -884,6 +883,66 @@ const cloneElementStyleAndClassWithPath = (element: HTMLElement): HTMLElement =>
   return cloned
 }
 
+/**
+ * 辅助函数：验证当前模板 pointer 是否符合 element 在根节点 rootElement 下的路径，
+ * 如果不符合，则重新生成模板。返回新的模板和正确的指针。
+ */
+const validateAndUpdatePointer = (
+  rootElement: HTMLElement,
+  currentTemplate: HTMLElement,
+  element: HTMLElement,
+  currentPointer: HTMLElement,
+): { newTemplate: HTMLElement; newPointer: HTMLElement } => {
+  // 获取目标 element 的路径
+  const path = getElementPath(rootElement, element)
+  // 根据当前模板查找正确的插入位置（不包括目标元素自身）
+  const expectedPointer = getDeepestPointer(currentTemplate, path)
+  if (currentPointer !== expectedPointer) {
+    console.warn('模板校验失败，当前指针不匹配，重新生成模板')
+    // 重新生成模板，根据完整路径生成新的模板（模板中包含目标元素自身的层级信息）
+    const newTemplate = createTemplateByPath(rootElement, path)
+    // 由于重新生成的模板包含目标元素自身的层级，因此再调用 getDeepestPointer 时会返回目标父级
+    const newPointer = getDeepestPointer(newTemplate, path)
+    return { newTemplate, newPointer }
+  } else {
+    // 如果匹配，直接返回原有模板与指针
+    return { newTemplate: currentTemplate, newPointer: currentPointer }
+  }
+}
+
+// 修改后的 getDeepestPointer，去掉最后一级（代表当前元素自身）
+const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => {
+  const parts = path.split('/').filter(Boolean)
+  // 去掉最后一段，因为最后一级表示目标元素自身
+  parts.pop()
+  let current: HTMLElement = template
+  for (const part of parts) {
+    const match = part.match(/([a-zA-Z]+)\[(\d+)\]/)
+    if (match) {
+      const tagName = match[1].toLowerCase()
+      const index = parseInt(match[2], 10)
+      let counter = 0
+      let found: HTMLElement | null = null
+      for (let i = 0; i < current.children.length; i++) {
+        const child = current.children[i] as HTMLElement
+        if (child.tagName.toLowerCase() === tagName) {
+          if (counter === index) {
+            found = child
+            break
+          }
+          counter++
+        }
+      }
+      if (found) {
+        current = found
+      } else {
+        console.warn(`在模板中找不到对应的节点: ${part}，将保持当前节点`)
+      }
+    }
+  }
+  return current
+}
+
 // 处理元素的具体分页逻辑
 const pagedEnginePointerHighLevelCoreProcessElement = (
   element: HTMLElement,
@@ -897,18 +956,67 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
   pointer_div: [HTMLElement | undefined],
   root_element: HTMLElement,
 ): void => {
+  let tester_container_backup: undefined | HTMLElement = undefined
   let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
     let flag_high_level_paged = false
     let flag_img = false
 
-    if (current_page.length === 0 && pointer_div[0] === undefined) {
-      // 第一次调用时获取新的操作指针
-      const neo_pointer = (div_template as HTMLElement).cloneNode(true)
-      tester_container.appendChild(neo_pointer)
-      pointer_div[0] = <HTMLElement>neo_pointer
+    if (pointer_div[0] === undefined) {
+      // 第一次创建操作指针
+      console.debug('first_template', div_template)
+      const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+      // 根据当前 element 对应的路径，重新生成模板
+      const path = getElementPath(root_element, element)
+      console.log('path', path)
+      // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
+      const correctPointer = getDeepestPointer(clonedTemplate, path)
+      tester_container.appendChild(clonedTemplate)
+      pointer_div[0] = correctPointer
+    } else {
+      // 每次插入元素前都验证当前模板是否匹配
+      // 假设当前模板为 tester_container.firstElementChild（或其他保存的模板引用）
+      const currentTemplate = tester_container.firstElementChild as HTMLElement
+      const { newTemplate } = validateAndUpdatePointer(
+        root_element,
+        currentTemplate,
+        element,
+        pointer_div[0],
+      )
+      // 如果模板发生了更新，替换 tester_container 的内容和 pointer_div
+      if (newTemplate !== currentTemplate) {
+        tester_container_backup = tester_container.cloneNode(true) as HTMLElement
+        // 尝试去掉 newTemplate 的多余外壳
+        let unwrappedTemplate: HTMLElement = newTemplate
+        // 如果 newTemplate 只有一个子元素，则认为这个子元素是实际需要的模板
+        if (newTemplate.children.length === 1) {
+          unwrappedTemplate = newTemplate.firstElementChild as HTMLElement
+        }
+
+        // 获取当前指针的父容器
+        const parentContainer = pointer_div[0].parentElement
+        if (parentContainer) {
+          // 在当前指针的后面插入解包后的模板作为新的内容
+          parentContainer.insertBefore(unwrappedTemplate, pointer_div[0].nextSibling)
+        } else {
+          // 备用方案：直接追加到 tester_container 内
+          tester_container.appendChild(unwrappedTemplate)
+        }
+
+        // 重新根据当前 element 的路径计算新的指针
+        const newPath = getElementPath(root_element, element)
+        const adjustedNewPointer = getDeepestPointer(unwrappedTemplate, newPath)
+        pointer_div[0] = adjustedNewPointer
+      }
+      // if (newTemplate !== currentTemplate) {
+      //   // 不清空 tester_container，而是在其已有内容后追加新的模板
+      //   tester_container.appendChild(newTemplate)
+      //   // 更新操作指针为新模板中的指针
+      //   pointer_div[0] = newPointer
+      // }
     }
 
+    // 最后，将当前元素克隆后插入到当前的正确模板中
     ;(pointer_div[0] as HTMLElement).appendChild(element.cloneNode(true))
 
     const image_load_status = waitForResourceSync(element, 10) // 检测资源加载状态
@@ -943,17 +1051,29 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         // 先处理 part1，保存 part2
         ;(pointer_div[0] as HTMLElement).appendChild(part1)
 
-        current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+        const newDiv = document.createElement('div')
+        Array.from(tester_container.childNodes).forEach((child) => {
+          newDiv.appendChild(child.cloneNode(true))
+        })
+        current_page.push(newDiv)
+
         pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
         // 获取新的操作指针
         current_page.length = 0
         tester_container.innerHTML = ''
         flag_high_level_paged = false
-        // 获取新的操作指针
-        const neo_pointer = (div_template as HTMLElement).cloneNode(true)
-        tester_container.appendChild(neo_pointer)
-        pointer_div[0] = <HTMLElement>neo_pointer
+        console.debug('template', div_template)
+        // 克隆外层模板
+        const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+        // 根据当前 element 对应的路径，找到模板中对应的内部节点
+        const path = getElementPath(root_element, element)
+        console.log('path', path)
+        const correctPointer = getDeepestPointer(clonedTemplate, path)
+        // 将整个模板挂到测试容器上
+        tester_container.appendChild(clonedTemplate)
+        // 设置 pointer_div 指向最内层的指针
+        pointer_div[0] = correctPointer
         // 将 part2 保存到 container 中，便于后续处理
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
@@ -971,16 +1091,39 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         }
         console.log('isPageHaveImage', flag_img)
         if (tester_container.scrollHeight !== 0) {
-          current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
-          pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+          if (tester_container_backup !== undefined) {
+            const newDiv = document.createElement('div')
+            Array.from(tester_container_backup.childNodes).forEach((child) => {
+              newDiv.appendChild(child.cloneNode(true))
+            })
+            current_page.push(newDiv)
+
+            pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+          } else {
+            const newDiv = document.createElement('div')
+            Array.from(tester_container.childNodes).forEach((child) => {
+              newDiv.appendChild(child.cloneNode(true))
+            })
+            current_page.push(newDiv)
+
+            pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+          }
 
           current_page.length = 0
           tester_container.innerHTML = ''
           flag_high_level_paged = false
           // 获取新的操作指针
-          const neo_pointer = (div_template as HTMLElement).cloneNode(true)
-          tester_container.appendChild(neo_pointer)
-          pointer_div[0] = <HTMLElement>neo_pointer
+          console.debug('template', div_template)
+          // 克隆外层模板
+          const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+          // 根据当前 element 对应的路径，找到模板中对应的内部节点
+          const path = getElementPath(root_element, element)
+          console.log('path', path)
+          const correctPointer = getDeepestPointer(clonedTemplate, path)
+          // 将整个模板挂到测试容器上
+          tester_container.appendChild(clonedTemplate)
+          // 设置 pointer_div 指向最内层的指针
+          pointer_div[0] = correctPointer
           // neo_pointer.appendChild(element)
           savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
         } else if (flag_img === true) {
@@ -998,16 +1141,29 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           ;(pointer_div[0] as HTMLElement).appendChild(element)
           console.warn('div_template', div_template)
 
-          current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
+          const newDiv = document.createElement('div')
+          Array.from(tester_container.childNodes).forEach((child) => {
+            newDiv.appendChild(child.cloneNode(true))
+          })
+          current_page.push(newDiv)
+
           pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
           current_page.length = 0
           tester_container.innerHTML = ''
           flag_high_level_paged = false
           // 获取新的操作指针
-          const neo_pointer = (div_template as HTMLElement).cloneNode(true)
-          tester_container.appendChild(neo_pointer)
-          pointer_div[0] = <HTMLElement>neo_pointer
+          console.debug('template', div_template)
+          // 克隆外层模板
+          const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+          // 根据当前 element 对应的路径，找到模板中对应的内部节点
+          const path = getElementPath(root_element, element)
+          console.log('path', path)
+          const correctPointer = getDeepestPointer(clonedTemplate, path)
+          // 将整个模板挂到测试容器上
+          tester_container.appendChild(clonedTemplate)
+          // 设置 pointer_div 指向最内层的指针
+          pointer_div[0] = correctPointer
         } else {
           console.log('存在空页 已剔除')
           console.log(tester_container.scrollHeight)
@@ -1030,6 +1186,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     const path = getElementPath(root_element, element)
     console.log('path', path)
     next_div_template = createTemplateByPath(root_element, path)
+    console.debug('next_div_template', next_div_template)
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
         pagedEnginePointerHighLevelCore(
@@ -1660,7 +1817,7 @@ const loadContent = async (url: string): Promise<void> => {
     // const targetDiv = tempDiv.querySelector('div');
     // console.log(targetDiv);
     const doc = parseHTML(text)
-    // console.log(doc)
+    console.debug(doc)
 
     const images = doc.querySelectorAll('img') // 获取所有 img 元素
     // 创建一个新的容器用于存放处理后的图片
@@ -1761,7 +1918,7 @@ onMounted(async () => {
     }
   })
   // await loadContent('content.html') //! 加载内容
-  await loadContent('sample3.xhtml') //! 加载内容
+  await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
   // flag_single_page_mode.value = true
   // showPage(0) //显示首页
   // flag_single_page_mode.value = false
