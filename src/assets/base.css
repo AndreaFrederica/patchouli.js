@@ -36,18 +36,67 @@
   --section-gap: 160px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: var(--vt-c-black);
-    --color-background-soft: var(--vt-c-black-soft);
-    --color-background-mute: var(--vt-c-black-mute);
+/* 删除原有 @media (prefers-color-scheme: dark) 代码 */
 
-    --color-border: var(--vt-c-divider-dark-2);
-    --color-border-hover: var(--vt-c-divider-dark-1);
+/* 默认浅色模式变量 */
+:root {
+  --color-background: var(--vt-c-white);
+  --color-background-soft: var(--vt-c-white-soft);
+  --color-background-mute: var(--vt-c-white-mute);
+  --color-border: var(--vt-c-divider-light-2);
+  --color-border-hover: var(--vt-c-divider-light-1);
+  --color-heading: var(--vt-c-text-light-1);
+  --color-text: var(--vt-c-text-light-1);
+}
 
-    --color-heading: var(--vt-c-text-dark-1);
-    --color-text: var(--vt-c-text-dark-2);
-  }
+/* 暗黑模式变量通过 .dark 类控制 */
+.dark {
+  --color-background: var(--vt-c-black);
+  --color-background-soft: var(--vt-c-black-soft);
+  --color-background-mute: var(--vt-c-black-mute);
+  --color-border: var(--vt-c-divider-dark-2);
+  --color-border-hover: var(--vt-c-divider-dark-1);
+  --color-heading: var(--vt-c-text-dark-1);
+  --color-text: var(--vt-c-text-dark-2);
+}
+
+/* ========== CSS 变量定义 ========== */
+:root {
+  --floating-bg: #ffffffe6;
+  --floating-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+
+  --text-primary: #2c3e50;
+  --text-secondary: #666666;
+
+  --toggle-btn-bg: rgba(169, 169, 169, 0.3);
+  --toggle-btn-hover: #4caf50;
+
+  --progress-bg: #f0f0f0;
+  --progress-fill: #4caf50;
+
+  --btn-bg: #499a97;
+  --btn-hover: #387e7b;
+  --btn-active: #285e5d;
+  --btn-active-border: #1f5a5d;
+}
+
+.dark {
+  --floating-bg: rgba(40, 40, 40, 0.95);
+  --floating-shadow: 0px 4px 6px rgba(0, 0, 0, 0.3);
+
+  --text-primary: #f0f0f0;
+  --text-secondary: #cccccc;
+
+  --toggle-btn-bg: rgba(100, 100, 100, 0.5);
+  --toggle-btn-hover: #3a7f3a;
+
+  --progress-bg: #303030;
+  --progress-fill: #81c784;
+
+  --btn-bg: #276a68;
+  --btn-hover: #1f5a5d;
+  --btn-active: #14494d;
+  --btn-active-border: #0d3a3a;
 }
 
 *,

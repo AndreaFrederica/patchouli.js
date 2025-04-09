@@ -17,7 +17,7 @@ const iconSrc = 'logo.png' // 这里是图标的路径，替换为实际图标�
   display: flex;
   align-items: center;
   gap: 10px;
-  background-color: rgba(255, 255, 255, 0.9); /* 默认浅色背景 */
+  /* background-color: rgba(255, 255, 255, 0.9); */
   padding: 10px;
   border-radius: 8px;
   transition:
@@ -46,7 +46,7 @@ const iconSrc = 'logo.png' // 这里是图标的路径，替换为实际图标�
   margin: 0;
   font-size: 18px;
   font-weight: bold;
-  color: #000; /* 默认文字颜色 */
+  /* color: #000;  */
   white-space: nowrap; /* 禁止标题换行（可选） */
   overflow: hidden; /* 超出隐藏（可选） */
   text-overflow: ellipsis; /* 省略号效果（可选） */
@@ -58,20 +58,5 @@ const iconSrc = 'logo.png' // 这里是图标的路径，替换为实际图标�
   line-height: 1.4;
   color: #555; /* 默认文字颜色 */
   word-wrap: break-word; /* 允许长单词换行 */
-}
-
-/* 暗模式样式 */
-@media (prefers-color-scheme: dark) {
-  .about-widget {
-    background-color: rgba(45, 45, 45, 0.9); /* 暗色背景 */
-  }
-
-  .about-text h4 {
-    color: #fff; /* 浅色标题 */
-  }
-
-  .about-text p {
-    color: #ccc; /* 浅色正文 */
-  }
 }
 </style>

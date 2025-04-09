@@ -69,6 +69,7 @@ const patchouliContent = ref<HTMLElement>()
 const readerContainer = ref<HTMLElement>()
 const patchouliReader = ref<HTMLElement>()
 const cacheContainer = ref<HTMLElement>()
+const noContentDiv = ref<HTMLElement>()
 
 const touchStartX = ref(0)
 const touchEndX = ref(0)
@@ -107,6 +108,40 @@ const flag_auto_prev = ref(false)
 // const nextChapter = inject<() => void>('nextChapter')
 // const flag_auto_prev = inject<Ref<boolean>>('flag_auto_prev')
 // 需要在父级实现
+
+const chapters = ref<string[] | undefined>(undefined)
+
+const prevChapter = async () => {
+  // 改为 async 函数
+  if (chapters.value === undefined) return
+  const t = Number(localStorage.getItem('chapter')) - 1
+  if (t > 0) localStorage.setItem('chapter', String(t))
+  const url = `http://localhost:9100/${chapters.value[t]}`
+  console.log('download:', url)
+  await loadContent(url) // 使用 await
+  if (flag_auto_prev.value) {
+    showPage(-1)
+    flag_auto_prev.value = false
+  } else {
+    showPage(0)
+  }
+}
+
+const nextChapter = async () => {
+  // 改为 async 函数
+  if (chapters.value === undefined) return
+  const t = Number(localStorage.getItem('chapter')) + 1
+  if (t + 1 < chapters.value.length) localStorage.setItem('chapter', String(t))
+  const url = `http://localhost:9100/${chapters.value[t]}`
+  console.log('download:', url)
+  await loadContent(url) // 使用 await
+  if (flag_auto_prev.value) {
+    showPage(-1)
+    flag_auto_prev.value = false
+  } else {
+    showPage(0)
+  }
+}
 
 const handleResize = () => {
   if (patchouliReader.value) {
@@ -783,29 +818,84 @@ const pagedEnginePointerHighLevelCore = (
   )
 }
 
-const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
-  // 1. 拆分路径为每个层级的标志 例如 /div[2]/p[1]/span[3]
-  const parts = path.split('/').filter(Boolean) // 移除空路径部分
-  let pointer = rootElement // 从指定的 rootElement 开始
-  // 2. 创建一个母div作为结果模板
-  const motherDiv = document.createElement('div') // 这是最外层的母 div
-  let currentParent = motherDiv // 当前生成的模板中的“父级”
+// const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
+//   // 1. 拆分路径为每个层级的标志 例如 /div[2]/p[1]/span[3]
+//   const parts = path.split('/').filter(Boolean) // 移除空路径部分
+//   let pointer = rootElement // 从指定的 rootElement 开始
+//   // 2. 创建一个母div作为结果模板
+//   const motherDiv = document.createElement('div') // 这是最外层的母 div
+//   let currentParent = motherDiv // 当前生成的模板中的“父级”
 
-  parts.forEach((part) => {
+//   parts.forEach((part) => {
+//     console.log('templateGen path', part)
+//     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
+//     if (match) {
+//       console.log('templateGen path_detail', match)
+//       const tagName = match[1].toLowerCase() // 获取标签名 例如 div
+//       const index = parseInt(match[2], 10) // 获取索引 例如 2
+
+//       let counter = 0
+//       let foundElement: HTMLElement | null = null
+//       for (let i = 0; i < pointer.children.length; i++) {
+//         const child = pointer.children[i]
+//         if (child.tagName.toLowerCase() === tagName) {
+//           if (counter === index) {
+//             foundElement = child as HTMLElement
+//             break
+//           }
+//           counter++
+//         }
+//       }
+
+//       if (foundElement) {
+//         pointer = <HTMLElement>foundElement // 将指针指向路径中的子元素
+//         // 3. 使用 cloneElementStyleAndClass 函数克隆当前路径中的元素
+//         const newElement = cloneElementStyleAndClass(pointer) // 只复制样式和类名，不复制子内容
+//         currentParent.appendChild(newElement) // 将新元素插入到母模板中
+//         currentParent = newElement // 将指针移动到下一级
+//       } else {
+//         throw new Error(
+//           `Path error: No ${tagName}[${index}] found in ${pointer.tagName} div=${pointer}`,
+//         )
+//       }
+//     }
+//   })
+
+//   return motherDiv // 返回整个母 div 作为结果
+// }
+
+/**
+ * 根据给定的路径创建模板。路径格式示例："/div[2]/p[1]/span[3]"
+ * @param rootElement 起始的根元素
+ * @param path 路径字符串
+ * @returns 构建的模板（母 div）
+ */
+const createTemplateByPath = (rootElement: HTMLElement, path: string): HTMLElement => {
+  // 1. 拆分路径为每个层级的标志，例如 "/div[2]/p[1]/span[3]"
+  const parts = path.split('/').filter(Boolean) // 移除空路径部分
+  let pointer: HTMLElement = rootElement // 从指定的 rootElement 开始
+
+  // 2. 创建一个母 div 作为结果模板
+  const motherDiv: HTMLElement = document.createElement('div')
+  let currentParent: HTMLElement = motherDiv // 当前生成模板中的“父级”
+
+  // 使用 for...of 循环，方便在找不到元素时提前返回
+  for (const part of parts) {
     console.log('templateGen path', part)
     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
     if (match) {
       console.log('templateGen path_detail', match)
-      const tagName = match[1].toLowerCase() // 获取标签名 例如 div
-      const index = parseInt(match[2], 10) // 获取索引 例如 2
+      const tagName = match[1].toLowerCase() // 获取标签名，例如 div
+      const index = parseInt(match[2], 10) // 获取索引，例如 2
 
       let counter = 0
       let foundElement: HTMLElement | null = null
+      // 遍历当前元素的子元素查找匹配的标签
       for (let i = 0; i < pointer.children.length; i++) {
-        const child = pointer.children[i]
+        const child = pointer.children[i] as HTMLElement
         if (child.tagName.toLowerCase() === tagName) {
           if (counter === index) {
-            foundElement = child as HTMLElement
+            foundElement = child
             break
           }
           counter++
@@ -813,20 +903,21 @@ const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
       }
 
       if (foundElement) {
-        pointer = <HTMLElement>foundElement // 将指针指向路径中的子元素
+        pointer = foundElement // 将 pointer 指向找到的子元素
         // 3. 使用 cloneElementStyleAndClass 函数克隆当前路径中的元素
-        const newElement = cloneElementStyleAndClass(pointer) // 只复制样式和类名，不复制子内容
+        // 这个函数假设只复制样式和类名，不复制子内容
+        const newElement = cloneElementStyleAndClass(pointer)
         currentParent.appendChild(newElement) // 将新元素插入到母模板中
-        currentParent = newElement // 将指针移动到下一级
+        currentParent = newElement // 更新当前父级为新生成的元素
       } else {
-        throw new Error(
-          `Path error: No ${tagName}[${index}] found in ${pointer.tagName} div=${pointer}`,
-        )
+        // 找不到对应元素，打印错误并返回当前构建的模板
+        console.error(`Path error: No ${tagName}[${index}] found in ${pointer.tagName}.`)
+        return motherDiv
       }
     }
-  })
+  }
 
-  return motherDiv // 返回整个母 div 作为结果
+  return motherDiv // 返回整个母 div 作为最终结果
 }
 
 const getElementPath = (rootElement: HTMLElement, element: HTMLElement): string => {
@@ -1398,18 +1489,18 @@ const showPage = (pageIndex?: number) => {
     readerContainer.value.innerHTML = ''
 
     // 创建新的 div 元素
-    const noContentDiv = document.createElement('div')
-    noContentDiv.textContent = '章节无内容' // 设置文本
-    noContentDiv.style.display = 'flex' // 使用 Flex 布局
-    noContentDiv.style.justifyContent = 'center' // 水平居中
-    noContentDiv.style.alignItems = 'center' // 垂直居中
-    noContentDiv.style.height = '100%' // 高度占满容器
+    noContentDiv.value = document.createElement('div')
+    noContentDiv.value.textContent = '章节无内容' // 设置文本
+    noContentDiv.value.style.display = 'flex' // 使用 Flex 布局
+    noContentDiv.value.style.justifyContent = 'center' // 水平居中
+    noContentDiv.value.style.alignItems = 'center' // 垂直居中
+    noContentDiv.value.style.height = '100%' // 高度占满容器
     // noContentDiv.style.fontSize = '50px !important' // 设置字体大小 不生效
-    noContentDiv.style.color = '#666' // 设置字体颜色
-    noContentDiv.style.fontFamily = 'sans-serif'
+    noContentDiv.value.style.color = '#666' // 设置字体颜色
+    noContentDiv.value.style.fontFamily = 'sans-serif'
 
     // 将新元素添加到容器
-    readerContainer.value.appendChild(noContentDiv)
+    readerContainer.value.appendChild(noContentDiv.value)
     return
   }
 
@@ -1769,6 +1860,7 @@ function waitForImagesToLoad(
     noContentDiv.style.alignItems = 'center' // 水平居中
     noContentDiv.style.textAlign = 'center' // 文本居中对齐
     noContentDiv.style.height = '100%' // 高度占满容器
+    // noContentDiv.style.width = '100%'
     // noContentDiv.style.fontSize = '50px !important' // 设置字体大小 不生效
     noContentDiv.style.color = '#666' // 设置字体颜色
     noContentDiv.style.fontFamily = 'sans-serif'
@@ -1796,6 +1888,115 @@ function waitForImagesToLoad(
     new Promise<void>((resolve) => setTimeout(resolve, totalTimeout)),
   ])
 }
+
+interface ParsedOpf {
+  metadata: Record<string, string | string[]>
+  readingOrder: string[]
+}
+
+/**
+ * 请求并解析 OPF 文件，返回书籍元数据以及阅读顺序对应的 HTML/XHTML 文件列表
+ * @param opfUrl - OPF 文件的 URL
+ * @returns Promise<ParsedOpf> 返回解析后的元数据和阅读顺序列表
+ */
+async function parseOpfFile(opfUrl: string): Promise<ParsedOpf> {
+  // 请求获取 OPF 文件内容
+  const response = await fetch(opfUrl)
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const opfText = await response.text()
+
+  // 使用 DOMParser 解析 XML 字符串
+  const parser = new DOMParser()
+  const xmlDoc = parser.parseFromString(opfText, 'application/xml')
+
+  // 检查是否有解析错误（通过查找 <parsererror> 元素）
+  if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+    throw new Error('解析 OPF XML 文件时出错')
+  }
+
+  // -----------------
+  // 提取元数据
+  // -----------------
+  const metadata: Record<string, string | string[]> = {}
+  const metadataNode = xmlDoc.getElementsByTagName('metadata')[0]
+  if (metadataNode) {
+    // Dublin Core 的标准命名空间
+    const dcNamespace = 'http://purl.org/dc/elements/1.1/'
+    // 获取 metadata 中所有子元素，并筛选出 namespace 为 Dublin Core 的
+    const allChildren = metadataNode.getElementsByTagName('*')
+    for (let i = 0; i < allChildren.length; i++) {
+      const el = allChildren[i]
+      if (el.namespaceURI === dcNamespace) {
+        const tagName = el.localName // 去掉前缀，例如 title、creator 等
+        const text = el.textContent?.trim() ?? ''
+        // 如果同个标签名有多个值，则使用数组存储
+        if (metadata[tagName]) {
+          if (Array.isArray(metadata[tagName])) {
+            ;(metadata[tagName] as string[]).push(text)
+          } else {
+            metadata[tagName] = [metadata[tagName] as string, text]
+          }
+        } else {
+          metadata[tagName] = text
+        }
+      }
+    }
+  }
+
+  // -----------------
+  // 构造 manifest 映射：id -> href
+  // -----------------
+  const manifest: Record<string, string> = {}
+  const manifestNode = xmlDoc.getElementsByTagName('manifest')[0]
+  if (manifestNode) {
+    const itemNodes = manifestNode.getElementsByTagName('item')
+    for (let i = 0; i < itemNodes.length; i++) {
+      const item = itemNodes[i]
+      const id = item.getAttribute('id')
+      const href = item.getAttribute('href')
+      if (id && href) {
+        manifest[id] = href
+      }
+    }
+  }
+
+  // -----------------
+  // 解析阅读顺序：根据 spine 中的 <itemref> 获取对应的文件（支持 .html 和 .xhtml）
+  // -----------------
+  const readingOrder: string[] = []
+  const spineNode = xmlDoc.getElementsByTagName('spine')[0]
+  if (spineNode) {
+    const itemrefNodes = spineNode.getElementsByTagName('itemref')
+    for (let i = 0; i < itemrefNodes.length; i++) {
+      const itemref = itemrefNodes[i]
+      const idref = itemref.getAttribute('idref')
+      if (idref && manifest[idref]) {
+        // 过滤文件后缀，支持 .html 或 .xhtml（忽略大小写）
+        if (/\.(html|xhtml)$/i.test(manifest[idref])) {
+          readingOrder.push(manifest[idref])
+        }
+      }
+    }
+  }
+
+  return { metadata, readingOrder }
+}
+
+// /* ===== 用例示例 ===== */
+// (async () => {
+//   try {
+//     // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
+//     const opfUrl = 'http://localhost:9100/content.opf';
+//     const { metadata, readingOrder } = await parseOpfFile(opfUrl);
+
+//     console.log("书籍元数据：", metadata);
+//     console.log("阅读顺序列表：", readingOrder);
+//   } catch (error) {
+//     console.error("错误：", error);
+//   }
+// })();
 
 const loadContent = async (url: string): Promise<void> => {
   try {
@@ -1918,7 +2119,34 @@ onMounted(async () => {
     }
   })
   // await loadContent('content.html') //! 加载内容
-  await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
+  /* ===== 用例示例 ===== */
+  let load_chapter: undefined | string = undefined
+  try {
+    // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
+    const opfUrl = 'http://localhost:9100/content.opf'
+    const { metadata, readingOrder } = await parseOpfFile(opfUrl)
+
+    console.log('书籍元数据：', metadata)
+    console.log('阅读顺序列表：', readingOrder)
+    if (readingOrder.length !== 0) {
+      chapters.value = readingOrder
+      let progress_chapter = Number(localStorage.getItem('chapter'))
+      if (progress_chapter === null) {
+        progress_chapter = 0
+      } else if (progress_chapter >= readingOrder.length) {
+        progress_chapter = 0
+      } else {
+        load_chapter = readingOrder[progress_chapter]
+        console.log('load:', load_chapter)
+      }
+    }
+  } catch (error) {
+    console.error('错误：', error)
+  }
+  const url = `http://localhost:9100/${load_chapter}`
+  console.log('download:', url)
+  // await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
+  await loadContent(url) //! 加载内容
   // flag_single_page_mode.value = true
   // showPage(0) //显示首页
   // flag_single_page_mode.value = false

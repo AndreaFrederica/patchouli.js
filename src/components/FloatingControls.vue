@@ -61,6 +61,30 @@
             {{ text_view_mode_bottom }}
           </button>
         </div>
+        <!-- 在 mode-buttons 部分修改为 -->
+        <div class="row">
+          <button
+            class="mode-btn"
+            :class="{ active: themeMode === 'light' }"
+            @click.stop="setTheme('light')"
+          >
+            🌞 Light
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: themeMode === 'dark' }"
+            @click.stop="setTheme('dark')"
+          >
+            🌙 Dark
+          </button>
+          <button
+            class="mode-btn"
+            :class="{ active: themeMode === 'system' }"
+            @click.stop="setTheme('system')"
+          >
+            ⚙️ System
+          </button>
+        </div>
       </div>
 
       <!-- About Widget (图标和信息部分) -->
@@ -71,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch, type Ref } from 'vue'
+import { computed, inject, onMounted, ref, watch, type Ref } from 'vue'
 import AboutWidget from './AboutWidget.vue'
 
 const onReaderClick = inject('PatchouliReader_onReaderClick')
@@ -162,15 +186,150 @@ const toggleCollapse = () => {
   // console.log("1111",(onReaderClick as Ref<boolean>).value)
   isCollapsed.value = !isCollapsed.value // 切换折叠状态
 }
+
+// 定义三种主题模式
+type ThemeMode = 'system' | 'dark' | 'light'
+const themeMode = ref<ThemeMode>('system')
+
+// 初始化主题
+onMounted(() => {
+  const savedMode = localStorage.getItem('themeMode') as ThemeMode | null
+  themeMode.value = savedMode || 'system'
+  applyTheme()
+})
+
+// 初始化主题
+onMounted(() => {
+  const savedMode = (localStorage.getItem('themeMode') as ThemeMode) || 'system'
+  themeMode.value = savedMode
+  applyTheme()
+})
+
+// 系统主题监听器
+let systemThemeQuery: MediaQueryList | null = null
+
+const setTheme = (mode: ThemeMode) => {
+  themeMode.value = mode
+  localStorage.setItem('themeMode', mode)
+  applyTheme()
+}
+
+const applyTheme = () => {
+  if (systemThemeQuery) {
+    systemThemeQuery.removeEventListener('change', handleSystemThemeChange)
+  }
+
+  if (themeMode.value === 'system') {
+    systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    systemThemeQuery.addEventListener('change', handleSystemThemeChange)
+    updateThemeClass(systemThemeQuery.matches)
+  } else {
+    updateThemeClass(themeMode.value === 'dark')
+  }
+}
+
+const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+  if (themeMode.value === 'system') {
+    updateThemeClass(e.matches)
+  }
+}
+
+const updateThemeClass = (isDark: boolean) => {
+  document.documentElement.classList.toggle('dark', isDark)
+}
+
+// function onMounted(arg0: () => void) {
+//   throw new Error('Function not implemented.')
+// }
 </script>
 
 <style scoped>
-/* 通用样式 */
+/* ========== 通用样式 ========== */
 .floating-controls {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background-color: rgba(255, 255, 255, 0.9); /* 默认浅色背景 */
+  border-radius: 8px;
+  background-color: var(--floating-bg);
+  /* background-color: rgba(40, 40, 40, 0.95); */
+  border-radius: 12px;
+  padding: 16px;
+  /* box-shadow: var(--floating-shadow); */
+  z-index: 1000;
+  width: 400px;
+  transition: all 0.3s ease;
+  /* backdrop-filter: blur(8px); */
+  gap: 15px;
+  height: auto;
+}
+
+.toggle-btn {
+  background-color: var(--toggle-btn-bg);
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  &:hover {
+    background-color: var(--toggle-btn-hover);
+    color: white;
+  }
+}
+
+/* ========== 分页控件 ========== */
+.pagination-info {
+  color: var(--text-primary);
+  font-size: 0.9em;
+}
+
+/* .progress-bar {
+  background-color: var(--progress-bg);
+  .progress {
+    background-color: var(--progress-fill);
+  }
+} */
+
+/* ========== 按钮样式 ========== */
+.mode-btn {
+  background: var(--btn-bg);
+  color: white;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--btn-hover);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    background: var(--btn-active);
+    transform: translateY(1px);
+  }
+
+  &.active {
+    background: var(--btn-active-border) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ========== 响应式设计 ========== */
+@media (max-width: 600px) {
+  .floating-controls {
+    width: 90%;
+    right: 5%;
+    bottom: 10px;
+  }
+
+  .row {
+    flex-wrap: wrap;
+    button {
+      flex: 1 0 45%;
+      margin: 4px;
+    }
+  }
+}
+
+/* .floating-controls {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
   border-radius: 8px;
   padding: 10px;
   box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
@@ -180,10 +339,7 @@ const toggleCollapse = () => {
   gap: 15px;
   width: 300px;
   height: auto;
-  transition:
-    transform 0.3s ease,
-    background-color 0.3s ease; /* 添加背景色过渡效果 */
-}
+} */
 
 .floating-controls.collapsed {
   bottom: 20px;
@@ -195,7 +351,6 @@ const toggleCollapse = () => {
   top: 20px;
   right: 20px;
   background-color: rgba(169, 169, 169, 0.5); /* 灰色且半透明 */
-  color: white;
   border: none;
   border-radius: 5px;
   padding: 10px 20px;
@@ -249,7 +404,6 @@ const toggleCollapse = () => {
   margin: 0 5px;
   font-size: 14px;
   background-color: #4caf50;
-  color: white;
   border: none;
   border-radius: 3px;
   width: 80px;
@@ -272,7 +426,6 @@ const toggleCollapse = () => {
   padding: 8px 15px; /* 按钮内边距 */
   font-size: 14px; /* 字体大小 */
   background-color: #499a97; /* 背景色 */
-  color: white; /* 文字颜色 */
   border: none; /* 移除边框 */
   border-radius: 5px; /* 圆角 */
   cursor: pointer; /* 鼠标样式 */
@@ -303,16 +456,6 @@ const toggleCollapse = () => {
   }
 }
 
-.mode-buttons button {
-  padding: 5px 10px;
-  margin: 0 5px;
-  font-size: 14px;
-  background-color: #499a97;
-  color: white;
-  border: none;
-  border-radius: 3px;
-}
-
 .size-bar {
   display: flex;
   align-items: center;
@@ -321,47 +464,5 @@ const toggleCollapse = () => {
 
 .size-bar input {
   margin: 0 10px;
-}
-
-/* 暗模式样式 */
-@media (prefers-color-scheme: dark) {
-  .floating-controls {
-    background-color: rgba(45, 45, 45, 0.9); /* 暗模式背景 */
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.8);
-  }
-
-  .toggle-btn {
-    background-color: rgba(100, 100, 100, 0.7); /* 按钮浅灰色背景 */
-    color: #f0f0f0; /* 按钮文字浅色 */
-  }
-
-  .toggle-btn:hover {
-    background-color: #3a7f3a; /* 深绿色 */
-  }
-
-  .pagination-info {
-    color: #f0f0f0; /* 浅色文字 */
-  }
-
-  .progress-bar {
-    background-color: #303030; /* 暗色进度条背景 */
-  }
-
-  .progress {
-    background-color: #81c784; /* 浅绿色 */
-  }
-
-  .page-buttons button {
-    background-color: #357a38; /* 深绿色 */
-  }
-
-  .mode-buttons button {
-    background-color: #276a68; /* 深蓝绿色 */
-  }
-
-  .size-bar label,
-  .size-bar span {
-    color: #f0f0f0; /* 浅色文字 */
-  }
 }
 </style>
