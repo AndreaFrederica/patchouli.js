@@ -617,6 +617,46 @@ const getParagraphs_Simple = (
   return [part1, part2] // 返回两个分页部分
 }
 
+/**
+ * 针对外层为 <pre> 标签的拆分处理
+ * 内部先判断是否包含 <code> 子标签，如果有则调用针对代码的分页函数，
+ * 否则调用通用的文章分页函数。
+ *
+ * @param preElement - 要拆分的 <pre> 元素
+ * @param pointer_div - 用于测量的隐藏容器数组（取第一个即可）
+ * @returns 如果分页成功，则返回一个包含两个分页部分（包装在新的 <pre> 标签内）的元组，
+ *          否则返回 undefined（不需要分页）。
+ */
+const splitPreElement = (
+  preElement: HTMLElement,
+  pointer_div: HTMLElement[],
+): [HTMLElement, HTMLElement] | undefined => {
+  // 先判断 preElement 内是否包含 <code> 子标签
+  const codeChild = preElement.querySelector('code')
+
+  let result: [HTMLElement, HTMLElement] | undefined
+  if (codeChild) {
+    // 如果存在 <code> 子标签，则调用代码专用的分页函数
+    result = getCodeParagraphs_Simple(codeChild as HTMLElement, pointer_div[0])
+  } else {
+    // 如果没有 <code>，则按文本内容分页
+    result = getParagraphs_Simple(preElement, pointer_div[0])
+  }
+
+  // 如果分页未达到拆分条件，则返回 undefined
+  if (!result) return undefined
+
+  // 创建两个新的 <pre> 元素，用于包装拆分后的部分
+  // 这里保留 preElement 原有的样式和类，但不复制其子节点
+  const newPre1 = preElement.cloneNode(false) as HTMLElement
+  const newPre2 = preElement.cloneNode(false) as HTMLElement
+
+  newPre1.appendChild(result[0])
+  newPre2.appendChild(result[1])
+
+  return [newPre1, newPre2]
+}
+
 const getPages = (elements?: HTMLElement[]): HTMLElement[][] => {
   if (elements === undefined) return []
 
@@ -1343,6 +1383,12 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         if (element.tagName === 'CODE') {
           // 如果是代码块，则调用代码分页器
           result = getCodeParagraphs_Simple(element, pointer_div[0])
+        } else if (element.tagName === 'PRE') {
+          if (pointer_div === undefined) {
+            throw new Error('pointer_div undefined')
+          } else {
+            result = splitPreElement(element, pointer_div)
+          }
         } else {
           // 否则调用文章分页器
           result = getParagraphs_Simple(element, pointer_div[0])
