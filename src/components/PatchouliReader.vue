@@ -112,7 +112,7 @@ const flag_auto_prev = ref(false)
 // 需要在父级实现
 
 const chapters = ref<string[] | undefined>(undefined)
-const book = ref('python.epub')
+const book = ref('转生公主与天才千金的魔法革命%201%20-%20鸦ぴえろ.epub')
 const server = ref('http://localhost:9100')
 
 const getChapterUrlByIndex = (index: number) => {
@@ -177,6 +177,45 @@ const navigateToChapterByName = async (chapterName: string) => {
 
     // 根据需要控制页码显示，这里简单调用 showPage(0)
     showPage(0)
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+/**
+ * 根据传入的章节 id 进行跳转。
+ * 如果传入的 id 不合法，则转跳到 id = 0。
+ * 模仿 prevChapter 的逻辑，根据章节 id 获取目标 URL，
+ * 然后调用 loadContent 加载内容，并调用 showPage 刷新页面。
+ *
+ * @param chapterId - 章节 id（例如 12）
+ */
+const navigateToChapterByID = async (chapterId: number) => {
+  if (chapters.value === undefined) return
+
+  // 判断 id 的合法性：当 id 小于 0 或超出章节总数时，转为 0
+  let validId = chapterId
+  if (chapterId < 0 || chapterId >= chapters.value.length) {
+    console.warn(`章节 id ${chapterId} 不合法，将转跳到 id = 0`)
+    validId = 0
+  }
+
+  // 更新本地存储中的当前章节索引
+  localStorage.setItem('chapter', String(validId))
+
+  // 根据章节 id 获取目标 URL（假设 getChapterUrlByIndex 已经实现）
+  const url = getChapterUrlByIndex(validId)
+  console.log('download:', url)
+
+  try {
+    // 加载内容（假设 loadContent 为异步加载章节内容的函数）
+    await loadContent(url)
+    if (flag_auto_prev.value) {
+      showPage(-1)
+      flag_auto_prev.value = false
+    } else {
+      showPage(0)
+    }
   } catch (error) {
     console.error(error)
   }
@@ -2427,6 +2466,7 @@ onMounted(async () => {
   let load_chapter: undefined | string = undefined
 
   const opfUrl = `${server.value}/${book.value}/content.opf`
+  let index: undefined | number = undefined
   try {
     // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
 
@@ -2442,28 +2482,34 @@ onMounted(async () => {
       } else if (progress_chapter >= readingOrder.length) {
         progress_chapter = 0
       } else {
-        load_chapter = readingOrder[progress_chapter]
-        console.log('load:', load_chapter)
       }
+      load_chapter = readingOrder[progress_chapter]
+      console.log('load:', load_chapter)
+      index = progress_chapter
     }
   } catch (error) {
     console.error('错误：', error)
   }
   const url = `${server.value}/${book.value}/${load_chapter}`
+  //TODO 规划化加载
   console.log('download:', url)
-  // await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
-  await loadContent(url) //! 加载内容
-  // flag_single_page_mode.value = true
-  // showPage(0) //显示首页
-  // flag_single_page_mode.value = false
+  // // await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
+  // await loadContent(url) //! 加载内容
+  // // flag_single_page_mode.value = true
   // // showPage(0) //显示首页
-  // await sleep(3000)
-  if (flag_auto_prev.value) {
-    showPage(-1)
-    flag_auto_prev.value = false
-  } else {
-    showPage(0)
+  // // flag_single_page_mode.value = false
+  // // // showPage(0) //显示首页
+  // // await sleep(3000)
+  // if (flag_auto_prev.value) {
+  //   showPage(-1)
+  //   flag_auto_prev.value = false
+  // } else {
+  //   showPage(0)
+  // }
+  if (index === undefined) {
+    throw new Error('页面不存在')
   }
+  navigateToChapterByID(index)
 })
 
 // 定义可选的配置参数类型
