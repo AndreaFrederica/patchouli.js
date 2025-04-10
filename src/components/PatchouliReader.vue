@@ -97,6 +97,8 @@ const flag_flatten_DOM = ref(true)
 // TODO doing 应当实现一个不依赖dom展平的分页器 PointerEngine正在开发
 const flag_use_pointer_engine = ref(true)
 
+const signal_flag_chapter_load_done = ref(false)
+
 const flag_auto_next = ref(true)
 // 允许自动切换章节
 
@@ -110,13 +112,82 @@ const flag_auto_prev = ref(false)
 // 需要在父级实现
 
 const chapters = ref<string[] | undefined>(undefined)
+const book = ref('test.epub')
+const server = ref('http://localhost:9100')
+
+const getChapterUrlByIndex = (index: number) => {
+  if (chapters.value === undefined) {
+    throw new Error('找不到章节信息')
+  }
+  return `${server.value}/${book.value}/${chapters.value[index]}`
+}
+
+//? SVG包装图片缩放因子
+const svg_wrapped_image_scaling_factor_width = ref(0.9)
+const svg_wrapped_image_scaling_factor_height = ref(0.8)
+
+/**
+ * 根据章节文件名获取完整章节 URL。
+ * 例如，传入 "part0012.html" 或 "text/part0012.html#toc-003" 后，会在 chapters 中查找条目（通过判断是否以该文件名结尾），拼接生成目标 URL。
+ *
+ * @param chapterName - 章节文件名（可以带 hash 部分）
+ * @returns 拼接生成的完整章节 URL
+ * @throws 当 chapters 不存在或没有匹配项时抛出错误
+ */
+const getChapterUrlByName = (chapterName: string): string => {
+  if (chapters.value === undefined) {
+    throw new Error('找不到章节信息')
+  }
+  // 去掉可能的 hash 部分
+  const cleanChapterName = chapterName.split('#')[0]
+  // 在 chapters 数组中查找以 cleanChapterName 结尾的条目
+  const index = chapters.value.findIndex((ch) => ch.endsWith(cleanChapterName))
+  if (index === -1) {
+    throw new Error(`未找到章节: ${chapterName}`)
+  }
+  return `${server.value}/${book.value}/${chapters.value[index]}`
+}
+
+/**
+ * 根据传入的章节文件名进行跳转。
+ * 模仿 prevChapter 的逻辑，根据章节名称获取目标 URL，然后调用 loadContent 加载内容，
+ * 并调用 showPage 刷新页面（具体的页面跳转逻辑可根据实际需求修改）。
+ *
+ * @param chapterName - 章节文件名（例如 "part0012.html#toc-003"）
+ */
+const navigateToChapterByName = async (chapterName: string) => {
+  if (chapters.value === undefined) return
+  try {
+    // 去掉可能的 hash 部分，得到纯文件名
+    const cleanChapterName = chapterName.split('#')[0]
+    // 在 chapters 数组中查找匹配的章节索引（通过 endsWith 判断，可根据实际需要调整匹配逻辑）
+    const chapterIndex = chapters.value.findIndex((ch) => ch.endsWith(cleanChapterName))
+    if (chapterIndex === -1) {
+      throw new Error(`未找到章节: ${chapterName}`)
+    }
+    // 更新本地存储中的当前章节索引
+    localStorage.setItem('chapter', String(chapterIndex))
+
+    // 根据章节名称获取目标 URL
+    const url = getChapterUrlByName(chapterName)
+    console.log('download:', url)
+
+    // 加载内容（假设 loadContent 为异步加载章节内容的函数）
+    await loadContent(url)
+
+    // 根据需要控制页码显示，这里简单调用 showPage(0)
+    showPage(0)
+  } catch (error) {
+    console.error(error)
+  }
+}
 
 const prevChapter = async () => {
   // 改为 async 函数
   if (chapters.value === undefined) return
   const t = Number(localStorage.getItem('chapter')) - 1
   if (t > 0) localStorage.setItem('chapter', String(t))
-  const url = `http://localhost:9100/${chapters.value[t]}`
+  const url = getChapterUrlByIndex(t)
   console.log('download:', url)
   await loadContent(url) // 使用 await
   if (flag_auto_prev.value) {
@@ -132,7 +203,7 @@ const nextChapter = async () => {
   if (chapters.value === undefined) return
   const t = Number(localStorage.getItem('chapter')) + 1
   if (t + 1 < chapters.value.length) localStorage.setItem('chapter', String(t))
-  const url = `http://localhost:9100/${chapters.value[t]}`
+  const url = getChapterUrlByIndex(t)
   console.log('download:', url)
   await loadContent(url) // 使用 await
   if (flag_auto_prev.value) {
@@ -151,37 +222,43 @@ const handleResize = () => {
   }
 }
 
-// 点击翻页处理函数
 const handleClick = (event: MouseEvent) => {
   if (!patchouliReader.value) return // 如果组件未挂载，直接返回
 
-  // 检查是否存在选中的文本
+  // 如果点击的目标是交互控件，则不触发翻页（例如 a、button 等）
+  const targetTag = (event.target as HTMLElement).tagName.toLowerCase()
+  if (['a', 'button', 'input'].includes(targetTag)) return
+
+  // 检查是否存在选中的文本（如果有文本选中，则不触发翻页）
   const selection = window.getSelection()
-  if (selection && selection.toString().length > 0) {
-    return // 如果有选中文本，则忽略点击事件
+  if (selection && selection.toString().trim().length > 0) {
+    return
   }
 
-  // 获取组件的位置和大小
+  // 获取组件位置和大小
   const rect = patchouliReader.value.getBoundingClientRect()
-
-  // 获取点击位置相对于组件的坐标
+  // 计算点击在组件内的 X 坐标
   const clickXInComponent = event.clientX - rect.left
-  // console.log('clickX:', event.clientX)
-  // console.log('clickXInComponent:', clickXInComponent)
 
-  const edgeWidth = rect.width * 0.2 // 边缘区域为组件宽度的 20%
+  // 调整边缘区域比例，例如 10%
+  const edgeRatio = 0.1
+  const edgeWidth = rect.width * edgeRatio
+
+  console.log('组件宽度:', rect.width, '点击坐标:', clickXInComponent, '边缘宽度:', edgeWidth)
 
   // 判断点击位置是否在左侧边缘区域
   if (clickXInComponent < edgeWidth) {
-    prevPage() // 点击左侧20%区域
+    console.log('触发上一页')
+    prevPage()
   }
   // 判断点击位置是否在右侧边缘区域
   else if (clickXInComponent > rect.width - edgeWidth) {
-    nextPage() // 点击右侧20%区域
+    console.log('触发下一页')
+    nextPage()
   }
-  // 如果点击位置在中间部分
+  // 中间区域点击
   else {
-    onReaderClick.value = true // 非边缘区域点击
+    onReaderClick.value = true
   }
 }
 
@@ -890,7 +967,7 @@ const createTemplateByPath = (rootElement: HTMLElement, path: string): HTMLEleme
   let currentPath = ''
 
   for (const part of parts) {
-    console.debug('templateGen path', part)
+    // console.debug('templateGen path', part)
     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
     if (match) {
       const tagName = match[1].toLowerCase() // 标签名称
@@ -996,21 +1073,21 @@ const validateAndUpdatePointer = (
   // 获取目标 element 的路径
   const path = getElementPath(rootElement, element)
   // 根据当前模板查找正确的插入位置（不包括目标元素自身）
-  console.debug('元素验证', 'path', path, '元素', element)
-  console.debug('current_template', currentTemplate)
+  // console.debug('元素验证', 'path', path, '元素', element)
+  // console.debug('current_template', currentTemplate)
   const expectedPointer = getDeepestPointer(currentTemplate, path)
   // 重新生成模板，根据完整路径生成新的模板（模板中包含目标元素自身的层级信息）
   const newTemplate = createTemplateByPath(rootElement, path)
   // 由于重新生成的模板包含目标元素自身的层级，因此再调用 getDeepestPointer 时会返回目标父级
 
   const verifyPointer = getDeepestPointer(currentTemplate, path)
-  console.debug('verifyPointer', verifyPointer)
-  console.debug('currentPointer', currentPointer, 'expectedPointer', expectedPointer)
-  console.debug('currentTemplate', currentTemplate, 'newTemplate', newTemplate)
+  // console.debug('verifyPointer', verifyPointer)
+  // console.debug('currentPointer', currentPointer, 'expectedPointer', expectedPointer)
+  // console.debug('currentTemplate', currentTemplate, 'newTemplate', newTemplate)
   if (verifyPointer !== expectedPointer) {
     console.warn('模板校验失败，当前指针不匹配，重新生成模板')
     const newPointer = getDeepestPointer(newTemplate, path)
-    console.debug('newPointer', newPointer)
+    // console.debug('newPointer', newPointer)
     return { newTemplate, newPointer }
   } else {
     // 如果匹配，直接返回原有模板与指针
@@ -1061,7 +1138,7 @@ const validateAndUpdatePointer = (
  * @returns 匹配到的最深节点；如果没有匹配到，则返回模板根节点
  */
 const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => {
-  console.debug('now_template', template)
+  // console.debug('now_template', template)
   // 1. 拆分路径，去除表示目标元素自身的最后一级
   const parts = path.split('/').filter(Boolean)
   parts.pop()
@@ -1074,14 +1151,15 @@ const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => 
   // 2. 重新构造目标 data-path。例如：parts = ["div[2]", "p[1]"]
   // 最终目标 data-path 为 "/div[2]/p[1]"
   const targetDataPath = '/' + parts.join('/')
-  console.debug('targetDataPath', targetDataPath)
+  // console.debug('targetDataPath', targetDataPath)
 
   // 3. 直接利用 querySelector 根据 data-path 属性查找对应的元素
   const found = template.querySelector(`[data-path="${targetDataPath}"]`) as HTMLElement
   if (found) {
     return found
   } else {
-    console.warn(`模板中未找到 data-path 为 "${targetDataPath}" 的节点，将返回根节点`)
+    // 如果直接是/[p] 或者/[div] 就会这样
+    // console.debug(`模板中未找到 data-path 为 "${targetDataPath}" 的节点，将返回根节点`)
     return template
   }
 }
@@ -1107,11 +1185,11 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
 
     if (pointer_div[0] === undefined) {
       // 第一次创建操作指针
-      console.debug('first_template', div_template)
+      // console.debug('first_template', div_template)
       const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
       // 根据当前 element 对应的路径，重新生成模板
       const path = getElementPath(root_element, element)
-      console.log('path', path)
+      // console.debug('path', path)
       // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
       const correctPointer = getDeepestPointer(clonedTemplate, path)
       tester_container.appendChild(clonedTemplate)
@@ -1212,12 +1290,12 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         current_page.length = 0
         tester_container.innerHTML = ''
         flag_high_level_paged = false
-        console.debug('template', div_template)
+        // console.debug('template', div_template)
         // 克隆外层模板
         const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
         // 根据当前 element 对应的路径，找到模板中对应的内部节点
         const path = getElementPath(root_element, element)
-        console.log('path', path)
+        console.debug('path', path)
         const correctPointer = getDeepestPointer(clonedTemplate, path)
         // 将整个模板挂到测试容器上
         tester_container.appendChild(clonedTemplate)
@@ -1227,7 +1305,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
         // 结束一页 高级分页失败了也会回退到这里
-        console.log('debug', element)
+        // console.log('debug', element)
         savedPart2Container.part2 = undefined
 
         if ((pointer_div[0] as HTMLElement).classList === undefined) {
@@ -1265,12 +1343,12 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           tester_container.innerHTML = ''
           flag_high_level_paged = false
           // 获取新的操作指针
-          console.debug('template', div_template)
+          // console.debug('template', div_template)
           // 克隆外层模板
           const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
           // 根据当前 element 对应的路径，找到模板中对应的内部节点
           const path = getElementPath(root_element, element)
-          console.log('path', path)
+          console.debug('path', path)
           const correctPointer = getDeepestPointer(clonedTemplate, path)
           // 将整个模板挂到测试容器上
           tester_container.appendChild(clonedTemplate)
@@ -1305,12 +1383,12 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           tester_container.innerHTML = ''
           flag_high_level_paged = false
           // 获取新的操作指针
-          console.debug('template', div_template)
+          // console.debug('template', div_template)
           // 克隆外层模板
           const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
           // 根据当前 element 对应的路径，找到模板中对应的内部节点
           const path = getElementPath(root_element, element)
-          console.log('path', path)
+          console.debug('path', path)
           const correctPointer = getDeepestPointer(clonedTemplate, path)
           // 将整个模板挂到测试容器上
           tester_container.appendChild(clonedTemplate)
@@ -1320,7 +1398,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
       }
     }
   } else {
-    console.log('element', element)
+    console.debug('element', element)
     // if (div_template === undefined) {
     //   const path = getElementPath(element)
     //   console.log(path)
@@ -1331,9 +1409,9 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     //   next_div_template = last_template.appendChild(createTemplateByPath(root_element, current_path))
     // }
     const path = getElementPath(root_element, element)
-    console.log('path', path)
+    console.debug('path', path)
     next_div_template = createTemplateByPath(root_element, path)
-    console.debug('next_div_template', next_div_template)
+    // console.debug('next_div_template', next_div_template)
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
         pagedEnginePointerHighLevelCore(
@@ -1354,11 +1432,18 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
 }
 
 const renderPage = (pageIndex: number) => {
+  signal_flag_chapter_load_done.value = false
   const contentContainer = <HTMLElement>readerContainer.value
   contentContainer.innerHTML = ''
-  if (pages.value === undefined) return
+  if (pages.value === undefined) {
+    signal_flag_chapter_load_done.value = true
+    return
+  }
   const subPage = pages.value[pageIndex]
-  if (subPage === undefined) return
+  if (subPage === undefined) {
+    signal_flag_chapter_load_done.value = true
+    return
+  }
   subPage.forEach((element) => {
     contentContainer.appendChild(element.cloneNode(true))
   })
@@ -1366,29 +1451,34 @@ const renderPage = (pageIndex: number) => {
     readProgress.value = pageIndex / (totalPages.value - 1)
   }
   contentContainer.style.visibility = 'visible'
+  signal_flag_chapter_load_done.value = true
 }
 
 const prevPage = () => {
-  if (currentPage.value > 0) {
-    currentPage.value--
-    renderPage(currentPage.value)
-  } else if (currentPage.value === 0 && flag_auto_next.value) {
-    console.log('自动切换到上一章节')
-    flag_auto_prev.value = true
-    prevChapter()
+  if (signal_flag_chapter_load_done.value === true) {
+    if (currentPage.value > 0) {
+      currentPage.value--
+      renderPage(currentPage.value)
+    } else if (currentPage.value === 0 && flag_auto_next.value) {
+      console.log('自动切换到上一章节')
+      flag_auto_prev.value = true
+      prevChapter()
+    }
   }
 }
 
 const nextPage = () => {
-  if (currentPage.value < totalPages.value - 1) {
-    // 继续翻页，渲染当前页
-    currentPage.value++
-    renderPage(currentPage.value)
-  } else if (currentPage.value === totalPages.value - 1) {
-    // 自动切换章节（仅在自动切换标志为 true 时）
-    if (flag_auto_next.value) {
-      console.log('自动切换到下一章节')
-      nextChapter()
+  if (signal_flag_chapter_load_done.value === true) {
+    if (currentPage.value < totalPages.value - 1) {
+      // 继续翻页，渲染当前页
+      currentPage.value++
+      renderPage(currentPage.value)
+    } else if (currentPage.value === totalPages.value - 1) {
+      // 自动切换章节（仅在自动切换标志为 true 时）
+      if (flag_auto_next.value) {
+        console.log('自动切换到下一章节')
+        nextChapter()
+      }
     }
   }
 }
@@ -1594,6 +1684,7 @@ const showPage = (pageIndex?: number) => {
   // console.log(currentPage.value)
   readerContainer.value.style.visibility = 'visible'
   renderPage(currentPage.value)
+  afterPageRender()
 }
 
 // 深拷贝函数
@@ -1954,7 +2045,7 @@ function waitForImagesToLoad(
 
     // 将新元素添加到容器
     ;(<HTMLElement>readerContainer.value).appendChild(noContentDiv)
-    console.debug('图片加载覆盖页面')
+    // console.debug('图片加载覆盖页面')
   }
 
   // 创建每张图片的加载或失败 Promise
@@ -2209,9 +2300,11 @@ onMounted(async () => {
   // await loadContent('content.html') //! 加载内容
   /* ===== 用例示例 ===== */
   let load_chapter: undefined | string = undefined
+
+  const opfUrl = `${server.value}/${book.value}/content.opf`
   try {
     // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
-    const opfUrl = 'http://localhost:9100/content.opf'
+
     const { metadata, readingOrder } = await parseOpfFile(opfUrl)
 
     console.log('书籍元数据：', metadata)
@@ -2231,7 +2324,7 @@ onMounted(async () => {
   } catch (error) {
     console.error('错误：', error)
   }
-  const url = `http://localhost:9100/${load_chapter}`
+  const url = `${server.value}/${book.value}/${load_chapter}`
   console.log('download:', url)
   // await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
   await loadContent(url) //! 加载内容
@@ -2247,6 +2340,127 @@ onMounted(async () => {
     showPage(0)
   }
 })
+
+// 定义可选的配置参数类型
+type SizeControlOptions = {
+  threshold?: number
+  keepRatio?: boolean
+  logLevel?: 'verbose' | 'silent'
+}
+
+/**
+ * 移除容器内 SVG 图片的固定尺寸属性（当图片尺寸超过容器尺寸时），
+ * 并添加一个标记属性 data-auto-resized，同时修改 SVG 的 viewBox 为容器尺寸。
+ *
+ * @param container - 目标容器（HTMLElement）
+ * @param options - 可选的额外配置参数（如日志级别）
+ */
+const removeOversizedImageAttributes = (
+  container: HTMLElement,
+  options?: SizeControlOptions,
+): void => {
+  // 获取容器尺寸（如容器为 svg，其尺寸可能由 CSS 决定，所以请确保容器已正确渲染）
+  const containerRect = container.getBoundingClientRect()
+  const [containerWidth, containerHeight] = [containerRect.width, containerRect.height]
+
+  // 查询所有容器内的 <svg> 中 <image> 节点
+  // 对于非 SVGElement 的情况，尝试使用 Vue 组件包装器的 $el 属性
+  const svgImages: SVGElement[] = Array.from(container.querySelectorAll('svg image')).map((img) => {
+    if (img instanceof SVGElement) return img
+    const maybeEl = (img as any).$el
+    return maybeEl instanceof SVGElement ? maybeEl : (img as SVGElement)
+  })
+
+  svgImages.forEach((imageEl) => {
+    // 根据属性计算对应的数值，保证数字非负
+    const getNumValue = (attr: string): number =>
+      Math.max(0, parseFloat(imageEl.getAttribute(attr) || '0'))
+
+    const [imgWidth, imgHeight] = ['width', 'height'].map(getNumValue)
+
+    // 尺寸判断逻辑：当图片宽度或高度大于容器宽高时
+    const isOversized = [imgWidth > containerWidth, imgHeight > containerHeight].some(Boolean)
+
+    if (isOversized) {
+      // 移除 width 和 height 属性，同时添加 data-auto-resized 标记
+      imageEl.removeAttribute('width')
+      imageEl.removeAttribute('height')
+      imageEl.toggleAttribute('data-auto-resized', true)
+      if (options?.logLevel === 'verbose') {
+        console.log(
+          `Resized image: removed width and height (Container: ${containerWidth}x${containerHeight}, Image: ${imgWidth}x${imgHeight})`,
+        )
+      }
+    }
+  })
+
+  // 修改 SVG 的 viewBox 属性为容器尺寸：查找所有 SVG 元素
+  const svgElements = Array.from(container.querySelectorAll('svg')) as SVGSVGElement[]
+  // // 如果 container 自身就是 SVG，则也进行修改
+  // if (container.tagName.toLowerCase() === 'svg') {
+  //   svgElements.push(container as SVGSVGElement)
+  // }
+  svgElements.forEach((svg) => {
+    svg.setAttribute(
+      'viewBox',
+      `0 0 ${containerWidth * svg_wrapped_image_scaling_factor_width.value} ${containerHeight * svg_wrapped_image_scaling_factor_height.value}`,
+    )
+    if (options?.logLevel === 'verbose') {
+      console.log(
+        `Updated viewBox for SVG element to "0 0 ${containerWidth * svg_wrapped_image_scaling_factor_width.value} ${containerHeight * svg_wrapped_image_scaling_factor_height.value}"`,
+      )
+    }
+  })
+
+  // 利用 ResizeObserver 实现响应式监听，当容器尺寸变化时重新触发自身
+  const observer = new ResizeObserver((entries) => {
+    // 如果检测到目标容器发生变化，则先断开观察器以避免多次触发
+    if (entries.some((entry) => entry.target === container)) {
+      observer.disconnect()
+      removeOversizedImageAttributes(container, options)
+    }
+  })
+  observer.observe(container)
+}
+
+/**
+ * 处理传入容器内所有章节链接，将链接的默认跳转行为拦截，
+ * 替换为调用 navigateToChapterByName 实现自定义转跳逻辑。
+ *
+ * @param container - 要处理的 DOM 容器（例如包含章节链接的元素）
+ */
+const processChapterLinksByName = (container: HTMLElement): void => {
+  // 查询容器内所有 a 链接
+  const links = container.querySelectorAll<HTMLAnchorElement>('a[href]')
+  links.forEach((link) => {
+    const originalHref = link.getAttribute('href')
+    if (!originalHref) return
+    // 解析出链接中的文件名部分。假设链接格式为 "part0012.html#toc-003" 或 "text/part0012.html#toc-003"
+    const pathParts = originalHref.split('/')
+    // 取数组最后部分（例如 "part0012.html#toc-003"）
+    const chapterPart = pathParts[pathParts.length - 1]
+    // 注册点击事件，拦截默认行为
+    link.addEventListener('click', async (event) => {
+      event.preventDefault()
+      try {
+        await navigateToChapterByName(chapterPart)
+      } catch (error) {
+        console.error(error)
+      }
+    })
+  })
+}
+
+/**
+ * 示例：在页面渲染结束之后执行图像尺寸控制操作
+ */
+const afterPageRender = () => {
+  if (signal_flag_chapter_load_done.value) {
+    if (readerContainer.value === undefined) return
+    removeOversizedImageAttributes(readerContainer.value)
+    processChapterLinksByName(readerContainer.value)
+  }
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
