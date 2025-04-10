@@ -759,8 +759,10 @@ const pagedEnginePointerHighLevel = (
   })
 
   // 如果最后有剩余的内容，保存到 pages
-  if ((pointer_div[0] as HTMLElement).hasChildNodes) {
-    pages.push([(pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement])
+  if (pointer_div[0] !== undefined) {
+    if ((pointer_div[0] as HTMLElement).hasChildNodes) {
+      pages.push([(pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement])
+    }
   }
 
   tester_container.innerHTML = '' // 清理测试容器
@@ -864,33 +866,28 @@ const pagedEnginePointerHighLevelCore = (
 //   return motherDiv // 返回整个母 div 作为结果
 // }
 
-/**
- * 根据给定的路径创建模板。路径格式示例："/div[2]/p[1]/span[3]"
- * @param rootElement 起始的根元素
- * @param path 路径字符串
- * @returns 构建的模板（母 div）
- */
 const createTemplateByPath = (rootElement: HTMLElement, path: string): HTMLElement => {
-  // 1. 拆分路径为每个层级的标志，例如 "/div[2]/p[1]/span[3]"
-  const parts = path.split('/').filter(Boolean) // 移除空路径部分
-  let pointer: HTMLElement = rootElement // 从指定的 rootElement 开始
+  // 拆分路径为每级标识，例如 "/div[2]/p[1]/span[3]"
+  const parts = path.split('/').filter(Boolean)
+  let pointer: HTMLElement = rootElement
 
-  // 2. 创建一个母 div 作为结果模板
+  // 创建一个母 div 作为结果模板
   const motherDiv: HTMLElement = document.createElement('div')
-  let currentParent: HTMLElement = motherDiv // 当前生成模板中的“父级”
+  let currentParent: HTMLElement = motherDiv
 
-  // 使用 for...of 循环，方便在找不到元素时提前返回
+  // 用于累积每一层的路径信息
+  let currentPath = ''
+
   for (const part of parts) {
-    console.log('templateGen path', part)
+    console.debug('templateGen path', part)
     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
     if (match) {
-      console.log('templateGen path_detail', match)
-      const tagName = match[1].toLowerCase() // 获取标签名，例如 div
-      const index = parseInt(match[2], 10) // 获取索引，例如 2
+      const tagName = match[1].toLowerCase() // 标签名称
+      const index = parseInt(match[2], 10) // 索引
 
       let counter = 0
       let foundElement: HTMLElement | null = null
-      // 遍历当前元素的子元素查找匹配的标签
+      // 在当前节点的子元素中查找对应标签
       for (let i = 0; i < pointer.children.length; i++) {
         const child = pointer.children[i] as HTMLElement
         if (child.tagName.toLowerCase() === tagName) {
@@ -903,21 +900,22 @@ const createTemplateByPath = (rootElement: HTMLElement, path: string): HTMLEleme
       }
 
       if (foundElement) {
-        pointer = foundElement // 将 pointer 指向找到的子元素
-        // 3. 使用 cloneElementStyleAndClass 函数克隆当前路径中的元素
-        // 这个函数假设只复制样式和类名，不复制子内容
+        pointer = foundElement // 指向找到的子元素
+        // 累计路径，例如："/div[2]"
+        currentPath += '/' + `${tagName}[${index}]`
+        // 克隆当前路径中的元素
         const newElement = cloneElementStyleAndClass(pointer)
-        currentParent.appendChild(newElement) // 将新元素插入到母模板中
-        currentParent = newElement // 更新当前父级为新生成的元素
+        // 在克隆的元素上添加自定义的 data-path 属性
+        newElement.setAttribute('data-path', currentPath)
+        currentParent.appendChild(newElement)
+        currentParent = newElement
       } else {
-        // 找不到对应元素，打印错误并返回当前构建的模板
-        console.error(`Path error: No ${tagName}[${index}] found in ${pointer.tagName}.`)
+        console.debug(`Path error: No ${tagName}[${index + 1}] found in ${pointer.tagName}.`)
         return motherDiv
       }
     }
   }
-
-  return motherDiv // 返回整个母 div 作为最终结果
+  return motherDiv
 }
 
 const getElementPath = (rootElement: HTMLElement, element: HTMLElement): string => {
@@ -987,13 +985,21 @@ const validateAndUpdatePointer = (
   // 获取目标 element 的路径
   const path = getElementPath(rootElement, element)
   // 根据当前模板查找正确的插入位置（不包括目标元素自身）
+  console.debug('元素验证', 'path', path, '元素', element)
+  console.debug('current_template', currentTemplate)
   const expectedPointer = getDeepestPointer(currentTemplate, path)
-  if (currentPointer !== expectedPointer) {
+  // 重新生成模板，根据完整路径生成新的模板（模板中包含目标元素自身的层级信息）
+  const newTemplate = createTemplateByPath(rootElement, path)
+  // 由于重新生成的模板包含目标元素自身的层级，因此再调用 getDeepestPointer 时会返回目标父级
+
+  const verifyPointer = getDeepestPointer(currentTemplate, path)
+  console.debug('verifyPointer', verifyPointer)
+  console.debug('currentPointer', currentPointer, 'expectedPointer', expectedPointer)
+  console.debug('currentTemplate', currentTemplate, 'newTemplate', newTemplate)
+  if (verifyPointer !== expectedPointer) {
     console.warn('模板校验失败，当前指针不匹配，重新生成模板')
-    // 重新生成模板，根据完整路径生成新的模板（模板中包含目标元素自身的层级信息）
-    const newTemplate = createTemplateByPath(rootElement, path)
-    // 由于重新生成的模板包含目标元素自身的层级，因此再调用 getDeepestPointer 时会返回目标父级
     const newPointer = getDeepestPointer(newTemplate, path)
+    console.debug('newPointer', newPointer)
     return { newTemplate, newPointer }
   } else {
     // 如果匹配，直接返回原有模板与指针
@@ -1001,37 +1007,72 @@ const validateAndUpdatePointer = (
   }
 }
 
-// 修改后的 getDeepestPointer，去掉最后一级（代表当前元素自身）
+// // 修改后的 getDeepestPointer，去掉最后一级（代表当前元素自身）
+// const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => {
+//   const parts = path.split('/').filter(Boolean)
+//   // 去掉最后一段，因为最后一级表示目标元素自身
+//   parts.pop()
+//   let current: HTMLElement = template
+//   if (parts.length === 0) {
+//     return current
+//   }
+//   for (const part of parts) {
+//     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/)
+//     if (match) {
+//       const tagName = match[1].toLowerCase()
+//       const index = parseInt(match[2], 10)
+//       let counter = 0
+//       let found: HTMLElement | null = null
+//       for (let i = 0; i < current.children.length; i++) {
+//         const child = current.children[i] as HTMLElement
+//         if (child.tagName.toLowerCase() === tagName) {
+//           if (counter === index) {
+//             found = child
+//             break
+//           }
+//           counter++
+//         }
+//       }
+//       if (found) {
+//         current = found
+//       } else {
+//         console.warn(`在模板中找不到对应的节点: ${part}，将保持当前节点`)
+//       }
+//     }
+//   }
+//   return current
+// }
+
+/**
+ * 根据自定义的 data-path 属性进行匹配，返回指定路径中倒数第二级（不包括最后一级，也就是目标元素自身）
+ * @param template 模板根节点（母 div）
+ * @param path 完整路径字符串，例如 "/div[2]/p[1]/span[3]"
+ * @returns 匹配到的最深节点；如果没有匹配到，则返回模板根节点
+ */
 const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => {
+  console.debug('now_template', template)
+  // 1. 拆分路径，去除表示目标元素自身的最后一级
   const parts = path.split('/').filter(Boolean)
-  // 去掉最后一段，因为最后一级表示目标元素自身
   parts.pop()
-  let current: HTMLElement = template
-  for (const part of parts) {
-    const match = part.match(/([a-zA-Z]+)\[(\d+)\]/)
-    if (match) {
-      const tagName = match[1].toLowerCase()
-      const index = parseInt(match[2], 10)
-      let counter = 0
-      let found: HTMLElement | null = null
-      for (let i = 0; i < current.children.length; i++) {
-        const child = current.children[i] as HTMLElement
-        if (child.tagName.toLowerCase() === tagName) {
-          if (counter === index) {
-            found = child
-            break
-          }
-          counter++
-        }
-      }
-      if (found) {
-        current = found
-      } else {
-        console.warn(`在模板中找不到对应的节点: ${part}，将保持当前节点`)
-      }
-    }
+
+  // 当 path 只包含目标元素自身时，返回模板根节点
+  if (parts.length === 0) {
+    return template
   }
-  return current
+
+  // 2. 重新构造目标 data-path。例如：parts = ["div[2]", "p[1]"]
+  // 最终目标 data-path 为 "/div[2]/p[1]"
+  const targetDataPath = '/' + parts.join('/')
+  console.debug('targetDataPath', targetDataPath)
+
+  // 3. 直接利用 querySelector 根据 data-path 属性查找对应的元素
+  const found = template.querySelector(`[data-path="${targetDataPath}"]`) as HTMLElement
+  if (found) {
+    return found
+  } else {
+    console.warn(`模板中未找到 data-path 为 "${targetDataPath}" 的节点，将返回根节点`)
+    return template
+  }
 }
 
 // 处理元素的具体分页逻辑
@@ -1067,7 +1108,13 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     } else {
       // 每次插入元素前都验证当前模板是否匹配
       // 假设当前模板为 tester_container.firstElementChild（或其他保存的模板引用）
-      const currentTemplate = tester_container.firstElementChild as HTMLElement
+      let currentTemplate: HTMLElement | undefined
+      if (div_template === undefined) {
+        throw ''
+      } else {
+        currentTemplate = div_template
+      }
+
       const { newTemplate } = validateAndUpdatePointer(
         root_element,
         currentTemplate,
@@ -1466,7 +1513,7 @@ const showPage = (pageIndex?: number) => {
     console.log('准备进行分页处理')
     pages.value = getPages(temp)
   }
-
+  console.log('pages', pages.value)
   console.log(`本章节有${totalPages.value}页`)
   // 处理负索引支持
   if (pageIndex !== undefined) {
@@ -1475,7 +1522,6 @@ const showPage = (pageIndex?: number) => {
     }
     if (pageIndex < 0 || pageIndex >= totalPages.value) {
       console.error(`页索引 ${pageIndex} 超出范围`)
-      return
     }
   }
   if (totalPages.value <= 0) {
@@ -1501,6 +1547,8 @@ const showPage = (pageIndex?: number) => {
 
     // 将新元素添加到容器
     readerContainer.value.appendChild(noContentDiv.value)
+    readerContainer.value.style.visibility = 'visible'
+    currentPage.value = -1
     return
   }
 
@@ -1687,6 +1735,7 @@ const initReader = async () => {
   readerContainer.value.style.width = `${readerWidth.value}px`
   // readerContainer.value.style.display = 'none'
   // readerContainer.value.style.width = '100vw'
+  readerContainer.value.style.position = 'relative'
   shadowRoot.value.appendChild(readerContainer.value)
 
   // 创建缓存容器
@@ -1852,21 +1901,39 @@ function waitForImagesToLoad(
   console.log(`发现 ${imageCount} 张图片，超时时间总计：${totalTimeout} ms`)
   if (totalTimeout >= showMessageTime) {
     const noContentDiv = document.createElement('div')
-    noContentDiv.textContent = `正在加载图片\n预计最长加载时间 ${totalTimeout / 1000}S`
-    noContentDiv.style.whiteSpace = 'pre-wrap'
-    noContentDiv.style.display = 'flex' // 使用 Flex 布局
-    noContentDiv.style.flexDirection = 'column' // 垂直排列
-    noContentDiv.style.justifyContent = 'center' // 垂直居中
-    noContentDiv.style.alignItems = 'center' // 水平居中
-    noContentDiv.style.textAlign = 'center' // 文本居中对齐
-    noContentDiv.style.height = '100%' // 高度占满容器
-    // noContentDiv.style.width = '100%'
-    // noContentDiv.style.fontSize = '50px !important' // 设置字体大小 不生效
-    noContentDiv.style.color = '#666' // 设置字体颜色
-    noContentDiv.style.fontFamily = 'sans-serif'
+    if (readerContainer.value?.innerHTML === '') {
+      noContentDiv.textContent = `正在加载图片\n预计最长加载时间 ${totalTimeout / 1000}S`
+      noContentDiv.style.whiteSpace = 'pre-wrap'
+      noContentDiv.style.display = 'flex' // 使用 Flex 布局
+      noContentDiv.style.flexDirection = 'column' // 垂直排列
+      noContentDiv.style.justifyContent = 'center' // 垂直居中
+      noContentDiv.style.alignItems = 'center' // 水平居中
+      noContentDiv.style.textAlign = 'center' // 文本居中对齐
+      noContentDiv.style.height = '100%' // 高度占满容器
+      // noContentDiv.style.width = '100%'
+      // noContentDiv.style.fontSize = '50px !important' // 设置字体大小 不生效
+      noContentDiv.style.color = '#666' // 设置字体颜色
+      noContentDiv.style.fontFamily = 'sans-serif'
+    } else {
+      //TODO没做完的堆叠窗口
+      noContentDiv.textContent = `正在加载图片\n预计最长加载时间 ${totalTimeout / 1000}S`
+      noContentDiv.style.whiteSpace = 'pre-wrap'
+      noContentDiv.style.display = 'flex' // 使用 Flex 布局
+      noContentDiv.style.flexDirection = 'column' // 垂直排列
+      noContentDiv.style.justifyContent = 'center' // 垂直居中
+      noContentDiv.style.alignItems = 'center' // 水平居中
+      noContentDiv.style.textAlign = 'center' // 文本居中对齐
+      noContentDiv.style.height = '20%' // 高度占满容器
+      // noContentDiv.style.width = '100%'
+      // noContentDiv.style.fontSize = '50px !important' // 设置字体大小 不生效
+      noContentDiv.style.color = '#666' // 设置字体颜色
+      noContentDiv.style.fontFamily = 'sans-serif'
+      noContentDiv.style.zIndex = '10'
+    }
 
     // 将新元素添加到容器
     ;(<HTMLElement>readerContainer.value).appendChild(noContentDiv)
+    console.debug('图片加载覆盖页面')
   }
 
   // 创建每张图片的加载或失败 Promise
@@ -2018,7 +2085,7 @@ const loadContent = async (url: string): Promise<void> => {
     // const targetDiv = tempDiv.querySelector('div');
     // console.log(targetDiv);
     const doc = parseHTML(text)
-    console.debug(doc)
+    console.info(doc)
 
     const images = doc.querySelectorAll('img') // 获取所有 img 元素
     // 创建一个新的容器用于存放处理后的图片
