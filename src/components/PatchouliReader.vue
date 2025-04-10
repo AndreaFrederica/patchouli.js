@@ -315,7 +315,14 @@ const flattenDOM = (
             : sanitizedClass
 
           if (classPath) {
-            element.className = `${element.className} parent-${classPath}`
+            // element.className = `${element.className} parent-${classPath}`
+            if (element instanceof SVGElement) {
+              // 获取已有的 class 属性（可能需要兼容性判断）
+              const currentClass = element.getAttribute('class') || ''
+              element.setAttribute('class', `${currentClass} parent-${classPath}`)
+            } else {
+              element.className = `${element.className} parent-${classPath}`
+            }
           }
 
           const clonedElement = element.cloneNode(false) as HTMLElement // 浅克隆移除子节点
@@ -610,7 +617,9 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     return (
       child.nodeType === Node.TEXT_NODE ||
       (child.nodeType === Node.ELEMENT_NODE &&
-        (child.nodeName === 'IMG' || (child as HTMLElement).className === 'duokan-image-single'))
+        (child.nodeName === 'IMG' || (child as HTMLElement).className === 'duokan-image-single')) ||
+      child.nodeName === 'SVG' ||
+      child.nodeName === 'svg'
     )
   }
 
@@ -635,6 +644,8 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     return true
   } else if (node.nodeName === 'P') {
     // 段落标签视为叶子节点
+    return true
+  } else if (node.nodeName === 'SVG') {
     return true
   } else if (/^H[1-6]$/.test(node.nodeName)) {
     // 标题标签 (h1-h6) 视为叶子节点
@@ -1227,6 +1238,9 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         if (element.tagName === 'IMG') {
           flag_img = true
         }
+        // if (element.nodeName === 'svg' || element.nodeName === 'SVG') {
+        //   flag_img = true
+        // }
         console.log('isPageHaveImage', flag_img)
         if (tester_container.scrollHeight !== 0) {
           if (tester_container_backup !== undefined) {
@@ -1264,7 +1278,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           pointer_div[0] = correctPointer
           // neo_pointer.appendChild(element)
           savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
-        } else if (flag_img === true) {
+        } else {
           // current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
           // pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
@@ -1302,11 +1316,6 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           tester_container.appendChild(clonedTemplate)
           // 设置 pointer_div 指向最内层的指针
           pointer_div[0] = correctPointer
-        } else {
-          console.log('存在空页 已剔除')
-          console.log(tester_container.scrollHeight)
-          console.log(pointer_div[0])
-          console.log(tester_container)
         }
       }
     }
@@ -1503,17 +1512,29 @@ const showPage = (pageIndex?: number) => {
   } else {
     readerContainer.value.style.height = `${maxHeight.value}px`
   }
+
+  let t: HTMLElement[][] | undefined = undefined
+
   if (flag_use_pointer_engine.value) {
     const temp = rawDOMtree.value.cloneNode(true)
     console.log('准备进行分页处理')
-    pages.value = getPages([<HTMLElement>temp])
+    t = getPages([<HTMLElement>temp])
   } else {
     // pages.value = getPages(rawElements.value as HTMLElement[])
     const temp = cloneHTMLElementList(rawElements.value as HTMLElement[])
     console.log('准备进行分页处理')
-    pages.value = getPages(temp)
+    t = getPages(temp)
   }
-  console.log('pages', pages.value)
+  //! 剔除空页
+  pages.value = []
+  t.forEach((page) => {
+    if (page.some((node) => node.innerHTML !== '')) {
+      pages.value.push(page)
+    }
+  })
+
+  // pages.value = t
+  console.log('pages', t)
   console.log(`本章节有${totalPages.value}页`)
   // 处理负索引支持
   if (pageIndex !== undefined) {
