@@ -112,7 +112,7 @@ const flag_auto_prev = ref(false)
 // 需要在父级实现
 
 const chapters = ref<string[] | undefined>(undefined)
-const book = ref('test.epub')
+const book = ref('python.epub')
 const server = ref('http://localhost:9100')
 
 const getChapterUrlByIndex = (index: number) => {
@@ -498,6 +498,72 @@ const waitForResourceSync = (htmlElement: HTMLElement, timeout = 5000) => {
 const hasOnlyText = (element: HTMLElement) =>
   element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE
 
+/**
+ * 针对 <code> 标签的最简单分页处理（按行分页）
+ * 注意：不处理缩进问题，只按行累加检测分页高度
+ *
+ * @param element - 原始包含代码的 HTMLElement
+ * @param pointer_div - 可选：用于放置测量文本的容器，如果未传入，则使用 hiddenContainer
+ * @returns [part1, part2] 两个分页后的部分，如果无法分页则返回 undefined
+ */
+const getCodeParagraphs_Simple = (
+  element: HTMLElement,
+  pointer_div?: HTMLElement,
+): [HTMLElement, HTMLElement] | undefined => {
+  // 克隆原始元素（包括样式和 class），作为分页的两个部分
+  const part1 = cloneElementStyleAndClass(element)
+  const part2 = cloneElementStyleAndClass(element)
+
+  // 获取原始代码文本（假设代码格式为每行以换行符分隔）
+  const codeText = element.innerText
+  if (!codeText) return undefined
+
+  // 指定一个容器用于隐藏测量
+  let container: HTMLElement
+  if (pointer_div === undefined) {
+    container = hiddenContainer.value as HTMLElement
+  } else {
+    container = pointer_div
+  }
+
+  // 将 part1 添加到隐藏容器中用于测量
+  container.appendChild(part1)
+
+  // 按行拆分代码文本
+  const codeLines = codeText.split('\n')
+  const accumulatedLines: string[] = []
+
+  // 循环累加每一行，直到达到分页阈值
+  for (const line of codeLines) {
+    accumulatedLines.push(line)
+    part1.innerText = accumulatedLines.join('\n')
+
+    // 判断当前 part1 是否已超过分页阈值
+    if (
+      (hiddenContainer.value as HTMLElement).scrollHeight / maxHeight.value >=
+      aggressive_paging_threshold
+    ) {
+      // 超出阈值则剔除最后一行，结束循环
+      accumulatedLines.pop()
+      part1.innerText = accumulatedLines.join('\n')
+      break
+    }
+  }
+
+  // 如果第一部分的行数太少或者已包含全部代码，则不需要分页（直接返回 undefined）
+  if (accumulatedLines.length <= 5 || accumulatedLines.length === codeLines.length) {
+    container.removeChild(part1)
+    return undefined
+  }
+
+  // 第二部分为剩余的行内容
+  const remainingLines = codeLines.slice(accumulatedLines.length)
+  part2.innerText = remainingLines.join('\n')
+
+  // 返回分页后的两部分
+  return [part1, part2]
+}
+
 // 最简单的高阶切分算法 没考虑div套娃 需要更多高级切分算法做补充
 const getParagraphs_Simple = (
   element: HTMLElement,
@@ -695,8 +761,7 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
       child.nodeType === Node.TEXT_NODE ||
       (child.nodeType === Node.ELEMENT_NODE &&
         (child.nodeName === 'IMG' || (child as HTMLElement).className === 'duokan-image-single')) ||
-      child.nodeName === 'SVG' ||
-      child.nodeName === 'svg'
+      child.nodeName === 'SVG'
     )
   }
 
@@ -723,6 +788,11 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
     // 段落标签视为叶子节点
     return true
   } else if (node.nodeName === 'SVG') {
+    return true
+  } else if (node.nodeName === 'CODE') {
+    return true
+  } else if (node.nodeName === 'PRE') {
+    //TODO 目前只是有限支持
     return true
   } else if (/^H[1-6]$/.test(node.nodeName)) {
     // 标题标签 (h1-h6) 视为叶子节点
@@ -1269,7 +1339,16 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         (pointer_div[0] as HTMLElement).lastChild as HTMLElement,
       )
       let result = undefined // 性能优化 避免重复调用高级分页算法
-      if (flag_high_level_paged === false) result = getParagraphs_Simple(element, pointer_div[0])
+      if (flag_high_level_paged === false) {
+        if (element.tagName === 'CODE') {
+          // 如果是代码块，则调用代码分页器
+          result = getCodeParagraphs_Simple(element, pointer_div[0])
+        } else {
+          // 否则调用文章分页器
+          result = getParagraphs_Simple(element, pointer_div[0])
+        }
+      }
+
       if (result !== undefined) {
         // 高级分页成功
         flag_high_level_paged = true
