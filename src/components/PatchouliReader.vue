@@ -1069,6 +1069,7 @@ const pagedEnginePointerHighLevel = (
   // 包装一个对象来保存 part2
   const savedPart2Container = { part2: undefined as HTMLElement | undefined }
   const pointer_div: [undefined | HTMLElement] = [undefined]
+  const old_div_template: [HTMLElement | undefined] = [undefined]
 
   elements.forEach((element) => {
     pagedEnginePointerHighLevelCore(
@@ -1082,6 +1083,7 @@ const pagedEnginePointerHighLevel = (
       undefined,
       pointer_div,
       element,
+      old_div_template,
     )
   })
 
@@ -1107,6 +1109,7 @@ const pagedEnginePointerHighLevelCore = (
   div_template: HTMLElement | undefined,
   pointer_div: [HTMLElement | undefined],
   root_element: HTMLElement,
+  old_div_template: [HTMLElement | undefined],
 ): void => {
   let i = 0
   // 如果 savedPart2 存在，优先处理它
@@ -1125,6 +1128,7 @@ const pagedEnginePointerHighLevelCore = (
       div_template,
       pointer_div,
       root_element,
+      old_div_template,
     )
     i += 1
   }
@@ -1144,6 +1148,7 @@ const pagedEnginePointerHighLevelCore = (
     div_template,
     pointer_div,
     root_element,
+    old_div_template,
   )
 }
 
@@ -1415,6 +1420,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
   div_template: HTMLElement | undefined,
   pointer_div: [HTMLElement | undefined],
   root_element: HTMLElement,
+  old_div_template: [HTMLElement | undefined],
 ): void => {
   let tester_container_backup: undefined | HTMLElement = undefined
   let next_div_template: HTMLElement | undefined = undefined
@@ -1428,7 +1434,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
       const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
       // 根据当前 element 对应的路径，重新生成模板
       const path = getElementPath(root_element, element)
-      // console.debug('path', path)
+      console.debug('path', path)
       // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
       const correctPointer = getDeepestPointer(clonedTemplate, path)
       tester_container.appendChild(clonedTemplate)
@@ -1437,20 +1443,32 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
       // 每次插入元素前都验证当前模板是否匹配
       // 假设当前模板为 tester_container.firstElementChild（或其他保存的模板引用）
       let currentTemplate: HTMLElement | undefined
-      if (div_template === undefined) {
-        throw ''
+      if (old_div_template[0] === undefined) {
+        if (div_template === undefined) {
+          throw ''
+        } else {
+          currentTemplate = div_template
+        }
       } else {
-        currentTemplate = div_template
+        currentTemplate = old_div_template[0]
       }
 
-      const { newTemplate } = validateAndUpdatePointer(
-        root_element,
+      const path = getElementPath(root_element, element)
+
+      const newTemplate = createTemplateByPath(root_element, path)
+      console.debug(
+        'path',
+        path,
+        '上一个模板',
         currentTemplate,
-        element,
+        '新模板',
+        newTemplate,
+        '老指针',
         pointer_div[0],
       )
       // 如果模板发生了更新，替换 tester_container 的内容和 pointer_div
       if (newTemplate !== currentTemplate) {
+        console.debug('模板更新', 'new=', newTemplate, 'old=', currentTemplate)
         tester_container_backup = tester_container.cloneNode(true) as HTMLElement
         // 尝试去掉 newTemplate 的多余外壳
         let unwrappedTemplate: HTMLElement = newTemplate
@@ -1458,7 +1476,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         if (newTemplate.children.length === 1) {
           unwrappedTemplate = newTemplate.firstElementChild as HTMLElement
         }
-
+        //TODO 这边有bug 新指针路径不能这么算 应该写一个算法 根据老模板和新模板算出正确的指针
         // 获取当前指针的父容器
         const parentContainer = pointer_div[0].parentElement
         if (parentContainer) {
@@ -1473,6 +1491,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         const newPath = getElementPath(root_element, element)
         const adjustedNewPointer = getDeepestPointer(unwrappedTemplate, newPath)
         pointer_div[0] = adjustedNewPointer
+        console.debug('新指针', adjustedNewPointer)
       }
       // if (newTemplate !== currentTemplate) {
       //   // 不清空 tester_container，而是在其已有内容后追加新的模板
@@ -1484,6 +1503,8 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
 
     // 最后，将当前元素克隆后插入到当前的正确模板中
     ;(pointer_div[0] as HTMLElement).appendChild(element.cloneNode(true))
+    // 保存老模板
+    if (div_template !== undefined) old_div_template[0] = <HTMLElement>div_template.cloneNode(true)
 
     const image_load_status = waitForResourceSync(element, 10) // 检测资源加载状态
     let now_height = tester_container.scrollHeight
@@ -1665,7 +1686,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
     const path = getElementPath(root_element, element)
     console.debug('path', path)
     next_div_template = createTemplateByPath(root_element, path)
-    // console.debug('next_div_template', next_div_template)
+    console.debug('next_div_template', next_div_template)
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
         pagedEnginePointerHighLevelCore(
@@ -1679,6 +1700,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           next_div_template,
           pointer_div,
           root_element,
+          old_div_template,
         )
       }
     })
