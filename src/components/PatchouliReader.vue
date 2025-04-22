@@ -16,8 +16,9 @@
     <div id="patchouli-reader" ref="patchouliReader">
       <!-- 内容区域 -->
       <div id="patchouli-content" ref="patchouliContent"></div>
-
-      <!-- 浮动控件容器 -->
+    </div>
+    <!-- 浮动控件容器 -->
+    <div class="floating-controls">
       <floating-controls
         :current-page="currentPage + 1"
         :total-pages="totalPages"
@@ -25,6 +26,7 @@
         :enable_high_level_paged_engine="flag_high_level_paged_engine"
         :enable_single_page_mode="flag_single_page_mode"
         :enable_pointer_engine="flag_use_pointer_engine"
+        :display_navigate="navigateIsVisible"
         v-model:fontSize="fontSize"
         v-model:headingFontSize="headingFontSize"
         @prev-page="prevPage"
@@ -32,6 +34,18 @@
         @switch-paged_mode="switchPagedMode"
         @switch-view-mode="switchViewMode"
         @switch-paged_engine="switchPagedEngine"
+        @switch-display-navigate="switchDisplayNavigate"
+      />
+    </div>
+    <div :style="navigateContainerStyles" class="navigate-viewer">
+      <!-- 控制显示隐藏 -->
+      <NavigateViewer
+        :url="navi_path"
+        :toc="tocData"
+        :visible="navigateIsVisible"
+        @tocSelect="handleTocSelect"
+        @file-select="handleFileSelect"
+        @dir-select="handleDirSelect"
       />
     </div>
   </div>
@@ -50,6 +64,7 @@ import {
   onDeactivated,
 } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
+import NavigateViewer, { type TocEntry } from './NavigateViewer.vue'
 
 const globalTestDivCounter = ref(0)
 const rawDOMtree = ref<HTMLElement>()
@@ -100,7 +115,9 @@ const flag_use_pointer_engine = ref(true)
 const signal_flag_chapter_load_done = ref(false)
 
 const flag_auto_next = ref(true)
+const flag_auto_next_load_done = ref(true)
 // 允许自动切换章节
+const flag_epub_mode = ref(false)
 
 const onReaderClick = ref(false)
 provide('PatchouliReader_onReaderClick', onReaderClick)
@@ -112,19 +129,78 @@ const flag_auto_prev = ref(false)
 // 需要在父级实现
 
 const chapters = ref<string[] | undefined>(undefined)
-const book = ref('转生公主与天才千金的魔法革命%201%20-%20鸦ぴえろ.epub')
+const book = ref('caniuse.epub')
 const server = ref('http://localhost:9100')
+const path = ref('/')
 
 const getChapterUrlByIndex = (index: number) => {
   if (chapters.value === undefined) {
     throw new Error('找不到章节信息')
   }
-  return `${server.value}/${book.value}/${chapters.value[index]}`
+  return `${server.value}${path.value}${book.value}/${chapters.value[index]}`
 }
 
 //? SVG包装图片缩放因子
 const svg_wrapped_image_scaling_factor_width = ref(0.9)
 const svg_wrapped_image_scaling_factor_height = ref(0.8)
+
+async function urlExists(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: 'GET' })
+    return response.ok
+  } catch (error) {
+    console.error('Error checking URL existence:', error)
+    return false
+  }
+}
+
+// 监听子组件目录项选择事件
+const handleTocSelect = (targetUrl: string) => {
+  console.log('选中的目录项目标 URL：', targetUrl)
+  // 例如：切换到页面模式并更新 URL
+  // pageUrl.value = targetUrl;
+}
+
+const handleDirSelect = async (path_pop: string) => {
+  console.log('选中了目录:', path_pop)
+  const url = `${server.value}${path_pop}`
+  const exists = await urlExists(url)
+  console.log(`The URL ${url} exists: `, exists)
+  if (path_pop.endsWith('/')) {
+  } else {
+    path_pop += '/'
+  }
+  console.log('new_path:', path_pop)
+  path.value = path_pop
+}
+
+const handleFileSelect = async (file_name: string) => {
+  console.log('选中了文件:', file_name)
+  const url = `${path.value}${file_name}`
+  const exists = await urlExists(url)
+  console.log(`The URL ${url} exists: `, exists)
+  if (exists) {
+    book.value = file_name
+    navigateIsVisible.value = false
+    await loadBook()
+  }
+}
+
+const navi_path = computed(() => `${server.value}${path.value}`)
+
+const tocData = ref<TocEntry[]>([
+  { id: 'np_1', playOrder: 1, label: '扉页', content: 'Text/part0000.xhtml' },
+  { id: 'np_2', playOrder: 2, label: '目录', content: 'Text/part0001.xhtml' },
+  { id: 'np_3', playOrder: 3, label: '推荐序', content: 'Text/part0004.xhtml' },
+  // 其他目录项……
+])
+// 控制组件显示隐藏
+const navigateIsVisible = ref(true)
+
+// 容器样式，宽高为母组件 80%，根据 visible 控制显示隐藏
+const navigateContainerStyles = computed(() => ({
+  display: navigateIsVisible.value ? 'block' : 'none',
+}))
 
 /**
  * 根据章节文件名获取完整章节 URL。
@@ -145,7 +221,7 @@ const getChapterUrlByName = (chapterName: string): string => {
   if (index === -1) {
     throw new Error(`未找到章节: ${chapterName}`)
   }
-  return `${server.value}/${book.value}/${chapters.value[index]}`
+  return `${server.value}${path.value}${book.value}/${chapters.value[index]}`
 }
 
 /**
@@ -223,34 +299,42 @@ const navigateToChapterByID = async (chapterId: number) => {
 
 const prevChapter = async () => {
   // 改为 async 函数
-  if (chapters.value === undefined) return
-  const t = Number(localStorage.getItem('chapter')) - 1
-  if (t > 0) localStorage.setItem('chapter', String(t))
-  const url = getChapterUrlByIndex(t)
-  console.log('download:', url)
-  await loadContent(url) // 使用 await
-  if (flag_auto_prev.value) {
-    showPage(-1)
-    flag_auto_prev.value = false
-  } else {
-    showPage(0)
+  if (flag_auto_next_load_done.value === true) {
+    flag_auto_next_load_done.value = false
+    if (chapters.value === undefined) return
+    const t = Number(localStorage.getItem('chapter')) - 1
+    if (t > 0) localStorage.setItem('chapter', String(t))
+    const url = getChapterUrlByIndex(t)
+    console.log('download:', url)
+    await loadContent(url) // 使用 await
+    if (flag_auto_prev.value) {
+      showPage(-1)
+      flag_auto_prev.value = false
+    } else {
+      showPage(0)
+    }
   }
+  flag_auto_next_load_done.value = true
 }
 
 const nextChapter = async () => {
   // 改为 async 函数
-  if (chapters.value === undefined) return
-  const t = Number(localStorage.getItem('chapter')) + 1
-  if (t + 1 < chapters.value.length) localStorage.setItem('chapter', String(t))
-  const url = getChapterUrlByIndex(t)
-  console.log('download:', url)
-  await loadContent(url) // 使用 await
-  if (flag_auto_prev.value) {
-    showPage(-1)
-    flag_auto_prev.value = false
-  } else {
-    showPage(0)
+  if (flag_auto_next_load_done.value === true) {
+    flag_auto_next_load_done.value = false
+    if (chapters.value === undefined) return
+    const t = Number(localStorage.getItem('chapter')) + 1
+    if (t + 1 < chapters.value.length) localStorage.setItem('chapter', String(t))
+    const url = getChapterUrlByIndex(t)
+    console.log('download:', url)
+    await loadContent(url) // 使用 await
+    if (flag_auto_prev.value) {
+      showPage(-1)
+      flag_auto_prev.value = false
+    } else {
+      showPage(0)
+    }
   }
+  flag_auto_next_load_done.value = true
 }
 
 const handleResize = () => {
@@ -871,6 +955,12 @@ const nodeIsLeaf = (node: HTMLElement): boolean => {
   } else if (node.nodeName === 'CODE') {
     return true
   } else if (node.nodeName === 'PRE') {
+    //TODO 目前只是有限支持
+    return true
+  } else if (node.nodeName === 'MATH') {
+    //TODO 目前只是有限支持
+    return true
+  } else if (node.nodeName === 'NAV') {
     //TODO 目前只是有限支持
     return true
   } else if (/^H[1-6]$/.test(node.nodeName)) {
@@ -1623,7 +1713,7 @@ const prevPage = () => {
     if (currentPage.value > 0) {
       currentPage.value--
       renderPage(currentPage.value)
-    } else if (currentPage.value === 0 && flag_auto_next.value) {
+    } else if (currentPage.value === 0 && flag_auto_next.value && flag_epub_mode.value) {
       console.log('自动切换到上一章节')
       flag_auto_prev.value = true
       prevChapter()
@@ -1637,7 +1727,7 @@ const nextPage = () => {
       // 继续翻页，渲染当前页
       currentPage.value++
       renderPage(currentPage.value)
-    } else if (currentPage.value === totalPages.value - 1) {
+    } else if (currentPage.value === totalPages.value - 1 && flag_epub_mode.value) {
       // 自动切换章节（仅在自动切换标志为 true 时）
       if (flag_auto_next.value) {
         console.log('自动切换到下一章节')
@@ -1657,6 +1747,10 @@ const switchPagedEngine = () => {
 
 const switchViewMode = () => {
   flag_single_page_mode.value = !flag_single_page_mode.value
+}
+
+const switchDisplayNavigate = () => {
+  navigateIsVisible.value = !navigateIsVisible.value
 }
 
 const adjustFontSize = () => {
@@ -1771,12 +1865,12 @@ const showPage = (pageIndex?: number) => {
 
   if (flag_use_pointer_engine.value) {
     const temp = rawDOMtree.value.cloneNode(true)
-    console.log('准备进行分页处理')
+    console.log('准备进行分页处理（Pointer）')
     t = getPages([<HTMLElement>temp])
   } else {
     // pages.value = getPages(rawElements.value as HTMLElement[])
     const temp = cloneHTMLElementList(rawElements.value as HTMLElement[])
-    console.log('准备进行分页处理')
+    console.log('准备进行分页处理（SourceGen）')
     t = getPages(temp)
   }
   //! 剔除空页
@@ -2258,7 +2352,7 @@ async function parseOpfFile(opfUrl: string): Promise<ParsedOpf> {
   if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
     throw new Error('解析 OPF XML 文件时出错')
   }
-
+  console.log('content.opf:', xmlDoc)
   // -----------------
   // 提取元数据
   // -----------------
@@ -2463,54 +2557,56 @@ onMounted(async () => {
   })
   // await loadContent('content.html') //! 加载内容
   /* ===== 用例示例 ===== */
+  await loadBook()
+})
+
+async function loadBook() {
   let load_chapter: undefined | string = undefined
 
-  const opfUrl = `${server.value}/${book.value}/content.opf`
-  let index: undefined | number = undefined
-  try {
-    // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
+  const opfUrl = `${server.value}${path.value}${book.value}/content.opf`
+  const opf_exist = await urlExists(opfUrl)
+  if (opf_exist) {
+    flag_epub_mode.value = true
+    let index: undefined | number = undefined
+    try {
+      // 替换为实际 OPF 文件的 URL，例如 '/path/to/content.opf'
+      const { metadata, readingOrder } = await parseOpfFile(opfUrl)
 
-    const { metadata, readingOrder } = await parseOpfFile(opfUrl)
-
-    console.log('书籍元数据：', metadata)
-    console.log('阅读顺序列表：', readingOrder)
-    if (readingOrder.length !== 0) {
-      chapters.value = readingOrder
-      let progress_chapter = Number(localStorage.getItem('chapter'))
-      if (progress_chapter === null) {
-        progress_chapter = 0
-      } else if (progress_chapter >= readingOrder.length) {
-        progress_chapter = 0
-      } else {
+      console.log('书籍元数据：', metadata)
+      console.log('阅读顺序列表：', readingOrder)
+      if (readingOrder.length !== 0) {
+        chapters.value = readingOrder
+        let progress_chapter = Number(localStorage.getItem('chapter'))
+        if (progress_chapter === null) {
+          progress_chapter = 0
+        } else if (progress_chapter >= readingOrder.length) {
+          progress_chapter = 0
+        } else {
+        }
+        load_chapter = readingOrder[progress_chapter]
+        console.log('load:', load_chapter)
+        index = progress_chapter
       }
-      load_chapter = readingOrder[progress_chapter]
-      console.log('load:', load_chapter)
-      index = progress_chapter
+    } catch (error) {
+      console.error('错误：', error)
     }
-  } catch (error) {
-    console.error('错误：', error)
+    if (index === undefined) {
+      throw new Error('页面不存在')
+    }
+    navigateToChapterByID(index)
+  } else {
+    flag_epub_mode.value = false
+    const file_url = `${server.value}${path.value}${book.value}`
+    console.log('download:', file_url)
+
+    try {
+      // 加载内容（假设 loadContent 为异步加载章节内容的函数）
+      await loadContent(file_url)
+    } catch (error) {
+      console.error(error)
+    }
   }
-  const url = `${server.value}/${book.value}/${load_chapter}`
-  //TODO 规划化加载
-  console.log('download:', url)
-  // // await loadContent('http://localhost:9100/Text/part0025.xhtml') //! 加载内容
-  // await loadContent(url) //! 加载内容
-  // // flag_single_page_mode.value = true
-  // // showPage(0) //显示首页
-  // // flag_single_page_mode.value = false
-  // // // showPage(0) //显示首页
-  // // await sleep(3000)
-  // if (flag_auto_prev.value) {
-  //   showPage(-1)
-  //   flag_auto_prev.value = false
-  // } else {
-  //   showPage(0)
-  // }
-  if (index === undefined) {
-    throw new Error('页面不存在')
-  }
-  navigateToChapterByID(index)
-})
+}
 
 // 定义可选的配置参数类型
 type SizeControlOptions = {
@@ -2667,5 +2763,17 @@ defineExpose({ patchouliContent })
 
   /* justify-content: center; 垂直居中 */
   align-items: center; /* 水平居中 */
+}
+
+.navigate-viewer {
+  width: 80%;
+  height: 80%;
+  z-index: 100;
+  position: fixed;
+  overflow: auto; /* 如果需要启用滚动 */
+  background-color: var(--floating-bg);
+}
+.floating-controls {
+  z-index: 200;
 }
 </style>

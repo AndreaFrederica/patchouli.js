@@ -132,6 +132,20 @@ const handleTocClick = (item: TocEntry) => {
 }
 
 /**
+ * 将给定的目录链接 href 转换为完整的 URL 字符串。
+ *
+ * @param href - 链接地址，例如 "/" 或 "subdir/"
+ * @param baseUrl - （可选）基准 URL，如果未传入，则使用 window.location.origin
+ * @returns 完整的 URL 字符串
+ */
+function convertDirLinkToUrl(href: string, baseUrl?: string): string {
+  const base = baseUrl || window.location.origin
+  // 使用 URL 构造函数将相对路径转换为绝对 URL
+  const fullUrl = new URL(href, base)
+  return fullUrl.href
+}
+
+/**
  * 处理文件模式下所有 a 标签的点击事件
  * @param container - 包含文件列表 HTML 内容的 DOM 容器
  */
@@ -150,18 +164,17 @@ const processFileLinks = (container: HTMLElement): void => {
     // const isDirectory =
     //   lowerHref.endsWith('/') ||
     //   (!lowerHref.includes('.') && (link.textContent?.trim().endsWith('/') ?? false))
-    const isDirectory = link.textContent?.trim().endsWith('/') ?? false
+    const isDirectory = (link.textContent?.trim().endsWith('/') || href === '/') ?? false
 
     if (isDirectory) {
       // 目录类型：拦截点击事件，计算正确的目录路径并触发 "dirSelect"
       link.addEventListener('click', (event) => {
         event.preventDefault()
-        let path = href
+        const path = href
         // 去除前导斜杠（若存在）
-        if (path.startsWith('/')) {
-          path = path.substring(1)
-        }
-        console.log('点击了目录', path)
+
+        const fullUrl = convertDirLinkToUrl(path, props.url)
+        console.log('点击了目录', fullUrl)
         // 触发目录选择事件，将正确的目录路径传递给母组件
         emit('dirSelect', path)
       })
@@ -171,14 +184,16 @@ const processFileLinks = (container: HTMLElement): void => {
       lowerHref.endsWith('.html') ||
       lowerHref.endsWith('.xhtml')
     ) {
-      // 文件类型：拦截点击事件，计算正确的文件名并触发 "fileSelect"
       link.addEventListener('click', (event) => {
         event.preventDefault()
         let fileName = href
+        // 去除前导斜杠
         if (fileName.startsWith('/')) {
           fileName = fileName.substring(1)
         }
-        // 触发文件选择事件，将正确的文件名传递出去
+        // 通过 "/" 分割，取最后一个部分作为文件名
+        const parts = fileName.split('/')
+        fileName = parts[parts.length - 1]
         console.log('点击了文件', fileName)
         emit('fileSelect', fileName)
       })
@@ -191,7 +206,7 @@ const processFileLinks = (container: HTMLElement): void => {
           fileName = fileName.substring(1)
         }
         // 触发文件选择事件，将正确的文件名传递出去
-        console.log('文件类型不支持')
+        console.log('文件类型不支持:', href)
       })
     }
     // 其他情况不做处理

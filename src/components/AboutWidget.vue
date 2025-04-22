@@ -56,7 +56,7 @@ const iconSrc = 'logo.png' // 这里是图标的路径，替换为实际图标�
   font-size: 14px;
   margin-top: 5px;
   line-height: 1.4;
-  color: #555; /* 默认文字颜色 */
+  /* color: #555;默认文字颜色 */
   word-wrap: break-word; /* 允许长单词换行 */
 }
 </style>

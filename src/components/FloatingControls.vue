@@ -60,6 +60,9 @@
           <button class="mode-btn" @click.stop="onViewModeClick">
             {{ text_view_mode_bottom }}
           </button>
+          <button class="mode-btn" @click.stop="onDisplayNavigate">
+            {{ text_display_navigate_bottom }}
+          </button>
         </div>
         <!-- 在 mode-buttons 部分修改为 -->
         <div class="row">
@@ -105,6 +108,7 @@ const emit = defineEmits([
   'switch-view-mode',
   'switch-paged_mode',
   'switch-paged_engine',
+  'switch-display-navigate',
 ])
 const props = defineProps({
   currentPage: {
@@ -131,6 +135,10 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  display_navigate: {
+    type: Boolean,
+    required: true,
+  },
 })
 
 const headingFontSize: Ref<number> = defineModel<number>('headingFontSize', { required: true })
@@ -150,6 +158,10 @@ const text_view_mode_bottom = computed(() =>
 
 const text_engine_mode_bottom = computed(() =>
   props.enable_pointer_engine === true ? 'Pointer' : 'SourceGen',
+)
+
+const text_display_navigate_bottom = computed(() =>
+  props.display_navigate === true ? 'NaviDisplay' : 'Navigate',
 )
 
 watch([onReaderClick as Ref<boolean>], () => {
@@ -179,6 +191,10 @@ const onPagedModeClick = () => {
 
 const onEngineModeClick = () => {
   emit('switch-paged_engine')
+}
+
+const onDisplayNavigate = () => {
+  emit('switch-display-navigate')
 }
 
 const toggleCollapse = () => {

@@ -2,6 +2,7 @@ import os
 import re
 import io
 import html
+from typing import Optional
 import zipfile
 import mimetypes
 import posixpath
@@ -18,7 +19,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
@@ -123,20 +124,53 @@ def list_epub_directory(
     return HTMLResponse(content=html_content)
 
 
+def recursive_search_opf(z: zipfile.ZipFile, current_dir: str = "") -> Optional[str]:
+    """
+    递归查找在当前目录（current_dir）下是否存在 content.opf 文件。
+    若存在则返回该文件的完整路径；否则继续在当前目录的直接子目录中进行递归搜索。
+    """
+    # 确保 current_dir 以 "/" 结尾（除了空字符串）
+    if current_dir and not current_dir.endswith("/"):
+        current_dir += "/"
+
+    # 构造候选文件路径
+    candidate = current_dir + "content.opf"
+    # 遍历 zip 中的所有条目查找直接匹配的 candidate
+    for name in z.namelist():
+        if name.lower() == candidate.lower():
+            return name
+
+    # 没有在当前目录直接找到，则收集当前目录下的所有直接子目录
+    subdirs = set()
+    for name in z.namelist():
+        if not name.startswith(current_dir):
+            continue
+        # 剥离掉 current_dir 部分
+        remaining = name[len(current_dir) :]
+        # 如果 remaining 包含 '/'，则说明后面还有子目录
+        if "/" in remaining:
+            subdir = remaining.split("/", 1)[0]
+            # 构造完整子目录路径（不带尾部斜杠）
+            subdirs.add(current_dir + subdir)
+    # 按照字母顺序遍历每个子目录进行递归搜索
+    for subdir in sorted(subdirs):
+        result = recursive_search_opf(z, subdir)
+        if result:
+            return result
+    return None
+
+
 def get_epub_root(z: zipfile.ZipFile) -> str:
     """
-    在 epub 压缩包内查找第一个以 content.opf 结尾的文件，
-    返回其所在的目录（如果在根目录则返回空字符串）。
-    如果未找到，则抛出 HTTPException。
+    递归搜索 epub 压缩包内 content.opf 文件所在目录。
+    如果未找到，则抛出 HTTPException；否则返回 content.opf 所在的目录（如果在根目录则返回空字符串）。
     """
-    target = None
-    for name in z.namelist():
-        if name.lower().endswith("content.opf"):
-            target = name
-            break
-    if not target:
+    result = recursive_search_opf(z, "")
+    if not result:
         raise HTTPException(status_code=500, detail="epub 内未找到 content.opf")
-    return posixpath.dirname(target)  # 可能为空字符串
+    # 打印调试信息
+    print(f"找到 content.opf 在: {posixpath.dirname(result)}/content.opf")
+    return posixpath.dirname(result)
 
 
 def is_directory_in_zip(z: zipfile.ZipFile, path: str) -> bool:
@@ -291,12 +325,16 @@ async def serve_epub(epub_filename: str, inner_path: str, request: Request) -> R
                         while relative_path.startswith("../"):
                             relative_path = relative_path[3:]
                         # 使用 urljoin 拼接时此时不会发生跳级操作
-                        new_url = urllib.parse.urljoin(absolute_url_prefix, relative_path)
+                        new_url = urllib.parse.urljoin(
+                            absolute_url_prefix, relative_path
+                        )
                         return f'{attr}="{new_url}"'
 
                     new_lines = []
                     for line in text.splitlines(keepends=True):
-                        new_line = re.sub(r'(src|href)="(\.\./[^"]+)"', replace_attr, line)
+                        new_line = re.sub(
+                            r'(src|href)="(\.\./[^"]+)"', replace_attr, line
+                        )
                         new_lines.append(new_line)
 
                     modified_content = "".join(new_lines)
