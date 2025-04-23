@@ -66,6 +66,7 @@ import {
 import FloatingControls from '@/components/FloatingControls.vue'
 import { loadToc, loadTocRaw, type NavPoint } from './NcxDecoder'
 import NavigateViewer from './NavigateViewer.vue'
+import { throttle } from 'lodash-es' // 或自己实现
 
 const globalTestDivCounter = ref(0)
 const rawDOMtree = ref<HTMLElement>()
@@ -129,11 +130,16 @@ const flag_auto_prev = ref(false)
 // const flag_auto_prev = inject<Ref<boolean>>('flag_auto_prev')
 // 需要在父级实现
 
+const flag_dev_mode = ref(false)
+
 const chapters = ref<string[] | undefined>(undefined)
 const book = ref('caniuse.epub')
 const server = ref('http://localhost:9100')
 const path = ref('/')
 const ncx = ref<NavPoint[] | undefined>(undefined)
+
+const WHEEL_THRESHOLD = 2 // px
+let pixelAccumulator = 0
 
 const getBookInfo = () => {
   const reading_book = localStorage.getItem('reading_book')
@@ -323,42 +329,48 @@ const navigateToChapterByID = async (chapterId: number) => {
 
 const prevChapter = async () => {
   // 改为 async 函数
+  console.log('自动切换到上一章节')
   if (flag_auto_next_load_done.value === true) {
     flag_auto_next_load_done.value = false
     if (chapters.value === undefined) return
     const t = Number(localStorage.getItem('chapter')) - 1
-    if (t > 0) localStorage.setItem('chapter', String(t))
-    const url = getChapterUrlByIndex(t)
-    console.log('download:', url)
-    await loadContent(url) // 使用 await
-    if (flag_auto_prev.value) {
-      showPage(-1)
-      flag_auto_prev.value = false
-    } else {
-      showPage(0)
+    if (t >= 0) {
+      localStorage.setItem('chapter', String(t))
+      const url = getChapterUrlByIndex(t)
+      console.log('download:', url)
+      await loadContent(url) // 使用 await
+      if (flag_auto_prev.value) {
+        showPage(-1)
+        flag_auto_prev.value = false
+      } else {
+        showPage(0)
+      }
     }
+    flag_auto_next_load_done.value = true
   }
-  flag_auto_next_load_done.value = true
 }
 
 const nextChapter = async () => {
   // 改为 async 函数
+  console.log('自动切换到下一章节')
   if (flag_auto_next_load_done.value === true) {
     flag_auto_next_load_done.value = false
     if (chapters.value === undefined) return
     const t = Number(localStorage.getItem('chapter')) + 1
-    if (t + 1 < chapters.value.length) localStorage.setItem('chapter', String(t))
-    const url = getChapterUrlByIndex(t)
-    console.log('download:', url)
-    await loadContent(url) // 使用 await
-    if (flag_auto_prev.value) {
-      showPage(-1)
-      flag_auto_prev.value = false
-    } else {
-      showPage(0)
+    if (t < chapters.value.length) {
+      localStorage.setItem('chapter', String(t))
+      const url = getChapterUrlByIndex(t)
+      console.log('download:', url)
+      await loadContent(url) // 使用 await
+      if (flag_auto_prev.value) {
+        showPage(-1)
+        flag_auto_prev.value = false
+      } else {
+        showPage(0)
+      }
     }
+    flag_auto_next_load_done.value = true
   }
-  flag_auto_next_load_done.value = true
 }
 
 const handleResize = () => {
@@ -391,16 +403,17 @@ const handleClick = (event: MouseEvent) => {
   const edgeRatio = 0.1
   const edgeWidth = rect.width * edgeRatio
 
-  console.log('组件宽度:', rect.width, '点击坐标:', clickXInComponent, '边缘宽度:', edgeWidth)
+  if (flag_dev_mode.value)
+    console.debug('组件宽度:', rect.width, '点击坐标:', clickXInComponent, '边缘宽度:', edgeWidth)
 
   // 判断点击位置是否在左侧边缘区域
   if (clickXInComponent < edgeWidth) {
-    console.log('触发上一页')
+    if (flag_dev_mode.value) console.log('触发上一页')
     prevPage()
   }
   // 判断点击位置是否在右侧边缘区域
   else if (clickXInComponent > rect.width - edgeWidth) {
-    console.log('触发下一页')
+    if (flag_dev_mode.value) console.log('触发下一页')
     nextPage()
   }
   // 中间区域点击
@@ -409,27 +422,78 @@ const handleClick = (event: MouseEvent) => {
   }
 }
 
-const handleWheel = (event: WheelEvent) => {
-  if (flag_single_page_mode.value !== true) {
-    //鼠标滚轮事件
-    if (event.deltaY > 0) {
-      // 向下滚动
-      nextPage()
-    } else if (event.deltaY < 0) {
-      // 向上滚动
-      prevPage()
-    }
-  } else {
-    // 单页模式下转为计算阅读进度
-    const scrollTop = window.scrollY // 当前页面顶部滚动位置
-    const scrollHeight = document.documentElement.scrollHeight // 整个文档高度
-    const clientHeight = document.documentElement.clientHeight // 可视区域高度
+// const handleWheel = (event: WheelEvent) => {
+//   if (flag_single_page_mode.value !== true && navigateIsVisible.value === false) {
+//     //鼠标滚轮事件
+//     if (event.deltaY > 0) {
+//       // 向下滚动
+//       nextPage()
+//     } else if (event.deltaY < 0) {
+//       // 向上滚动
+//       prevPage()
+//     }
+//   } else {
+//     // 单页模式下转为计算阅读进度
+//     const scrollTop = window.scrollY // 当前页面顶部滚动位置
+//     const scrollHeight = document.documentElement.scrollHeight // 整个文档高度
+//     const clientHeight = document.documentElement.clientHeight // 可视区域高度
 
-    // 确保不会出现分母为 0 的情况
-    readProgress.value =
-      scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1
+//     // 确保不会出现分母为 0 的情况
+//     readProgress.value =
+//       scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1
+//   }
+// }
+
+const normalizeDelta = (e: WheelEvent) => {
+  switch (e.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE:
+      return e.deltaY * 16
+    case WheelEvent.DOM_DELTA_PAGE:
+      return e.deltaY * window.innerHeight
+    default:
+      return e.deltaY // pixels
   }
 }
+
+const wheelHandler = throttle(
+  (e: WheelEvent) => {
+    if (readerContainer.value === undefined) return
+    if (flag_single_page_mode.value || navigateIsVisible.value) {
+      // 单页模式下转为计算阅读进度
+      const scrollTop = window.scrollY // 当前页面顶部滚动位置
+      const scrollHeight = document.documentElement.scrollHeight // 整个文档高度
+      const clientHeight = document.documentElement.clientHeight // 可视区域高度
+
+      // 确保不会出现分母为 0 的情况
+      readProgress.value =
+        scrollHeight > clientHeight ? Math.min(scrollTop / (scrollHeight - clientHeight), 1) : 1
+      if (readProgress.value === 0 && e.deltaY < 0) {
+        prevPage()
+      } else if (
+        readProgress.value === 1 &&
+        e.deltaY < 0 &&
+        readerContainer.value.scrollHeight < document.documentElement.clientHeight
+      ) {
+        prevPage()
+      } else if (readProgress.value === 1 && e.deltaY > 0) {
+        nextPage()
+      }
+      return
+    } else pixelAccumulator += normalizeDelta(e)
+
+    if (pixelAccumulator >= WHEEL_THRESHOLD) {
+      nextPage()
+      pixelAccumulator = 0
+    } else if (pixelAccumulator <= -WHEEL_THRESHOLD) {
+      prevPage()
+      pixelAccumulator = 0
+    }
+  },
+  40,
+  { trailing: false },
+) // 40 ms ~ 25 fps
+
+window.addEventListener('wheel', wheelHandler, { passive: true })
 
 // 触摸滑动开始处理函数
 const handleTouchStart = (event: TouchEvent) => {
@@ -1445,7 +1509,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
         // 根据当前 element 对应的路径，重新生成模板
         const path = getElementPath(root_element, element)
-        console.debug('path', path)
+        if (flag_dev_mode.value) console.debug('path', path)
         // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
         const correctPointer = getDeepestPointer(clonedTemplate, path)
         tester_container.appendChild(clonedTemplate)
@@ -1457,7 +1521,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           const clonedTemplate = (old_div_template[0] as HTMLElement).cloneNode(true) as HTMLElement
           // 根据当前 element 对应的路径，重新生成模板
           const path = getElementPath(root_element, <HTMLElement>old_element[0])
-          console.debug('old-path', path)
+          if (flag_dev_mode.value) console.debug('old-path', path)
           // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
           const correctPointer = getDeepestPointer(clonedTemplate, path)
           tester_container.appendChild(clonedTemplate)
@@ -1506,16 +1570,17 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         )
       }
 
-      console.debug(
-        'path',
-        path,
-        '上一个模板',
-        currentTemplate,
-        '新模板',
-        newTemplate,
-        '老指针',
-        pointer_div[0],
-      )
+      if (flag_dev_mode.value)
+        console.debug(
+          'path',
+          path,
+          '上一个模板',
+          currentTemplate,
+          '新模板',
+          newTemplate,
+          '老指针',
+          pointer_div[0],
+        )
     }
 
     // 最后，将当前元素克隆后插入到当前的正确模板中
@@ -1685,11 +1750,11 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
       }
     }
   } else {
-    console.debug('element', element)
+    if (flag_dev_mode.value) console.debug('element', element)
     const path = getElementPath(root_element, element)
-    console.debug('path', path)
+    if (flag_dev_mode.value) console.debug('path', path)
     next_div_template = createTemplateByPath(root_element, path)
-    console.debug('next_div_template', next_div_template)
+    if (flag_dev_mode.value) console.debug('next_div_template', next_div_template)
     Array.from(element.childNodes).forEach((node) => {
       if (node instanceof HTMLElement) {
         pagedEnginePointerHighLevelCore(
@@ -1740,7 +1805,7 @@ const prevPage = () => {
       currentPage.value--
       renderPage(currentPage.value)
     } else if (currentPage.value === 0 && flag_auto_next.value && flag_epub_mode.value) {
-      console.log('自动切换到上一章节')
+      console.debug('尝试自动切换到上一章节')
       flag_auto_prev.value = true
       prevChapter()
     }
@@ -1756,7 +1821,7 @@ const nextPage = () => {
     } else if (currentPage.value === totalPages.value - 1 && flag_epub_mode.value) {
       // 自动切换章节（仅在自动切换标志为 true 时）
       if (flag_auto_next.value) {
-        console.log('自动切换到下一章节')
+        console.debug('尝试自动切换到下一章节')
         nextChapter()
       }
     }
@@ -1866,6 +1931,7 @@ const updateCSS = () => {
 }
 
 const showPage = (pageIndex?: number) => {
+  const page_index_backup = pageIndex
   console.log('启动预渲染')
   if (hiddenContainer.value === undefined) return
   if (readerContainer.value === undefined) return
@@ -1968,6 +2034,17 @@ const showPage = (pageIndex?: number) => {
   // console.log(currentPage.value)
   readerContainer.value.style.visibility = 'visible'
   renderPage(currentPage.value)
+  if (flag_single_page_mode.value) {
+    if (page_index_backup === 0) {
+      // ⬆️ 顶部
+      window.scrollTo({ top: 0, behavior: 'auto' }) // 或 'smooth'
+    } else if (page_index_backup === -1) {
+      // ⬇️ 尾部
+      const doc = document.documentElement
+      const max = doc.scrollHeight - doc.clientHeight
+      window.scrollTo({ top: max, behavior: 'auto' })
+    }
+  }
   afterPageRender()
 }
 
@@ -2721,6 +2798,71 @@ const removeOversizedImageAttributes = (
 }
 
 /**
+ * 检测 container 内的所有 <img>，若其自然尺寸超出容器则
+ * 1) 按比例缩放到容器内
+ * 2) 标记 data-auto-resized="true"
+ * 3) 在容器尺寸变化时自动重新评估
+ *
+ * @param container 目标容器 (HTMLElement)
+ * @param options   可选参数
+ *   – logLevel: "verbose" | "silent"  日志级别，默认 "silent"
+ *   – fit:       "contain" | "cover"  缩放模式，默认 "contain"
+ */
+interface ImgSizeControlOptions {
+  logLevel?: 'verbose' | 'silent'
+  fit?: 'contain' | 'cover'
+}
+
+const fixOversizedImages = (container: HTMLElement, options: ImgSizeControlOptions = {}): void => {
+  const { logLevel = 'silent', fit = 'contain' } = options
+
+  // 一次性执行核心逻辑，方便后续多次调用
+  const run = () => {
+    const { width: cw, height: ch } = container.getBoundingClientRect() // 容器当前尺寸&#8203;:contentReference[oaicite:1]{index=1}
+
+    // 选出所有 <img>（含嵌套 <picture> 内 img）
+    const imgs: HTMLImageElement[] = Array.from(container.querySelectorAll<HTMLImageElement>('img'))
+
+    imgs.forEach((img) => {
+      // 若未加载完成，跳过（可结合 img.decode() 等待加载）&#8203;:contentReference[oaicite:2]{index=2}
+      if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) return
+
+      const { naturalWidth: iw, naturalHeight: ih } = img // 图片原始尺寸&#8203;:contentReference[oaicite:3]{index=3}
+
+      // 判断是否超出
+      const oversized = iw > cw || ih > ch
+      if (!oversized) return
+
+      // 计算缩放因子
+      const scale =
+        fit === 'cover'
+          ? Math.max(cw / iw, ch / ih) // cover：铺满容器，可能裁剪
+          : Math.min(cw / iw, ch / ih) // contain：完整可见
+      const [tw, th] = [Math.round(iw * scale), Math.round(ih * scale)]
+
+      // 应用尺寸，保留原始比例
+      img.style.width = `${tw}px`
+      img.style.height = `${th}px`
+      img.setAttribute('data-auto-resized', 'true')
+
+      // 可选：使用 object-fit 保证拉伸方式一致（现代浏览器支持）&#8203;:contentReference[oaicite:4]{index=4}
+      img.style.objectFit = fit
+
+      if (logLevel === 'verbose') {
+        console.log(`[auto-resize] ${img.src} => ${tw}×${th} (container ${cw}×${ch})`)
+      }
+    })
+  }
+
+  // 先跑一次
+  run()
+
+  // 用 ResizeObserver 监听容器变化&#8203;:contentReference[oaicite:5]{index=5}
+  const ro = new ResizeObserver(() => run())
+  ro.observe(container)
+}
+
+/**
  * 处理传入容器内所有章节链接，将链接的默认跳转行为拦截，
  * 替换为调用 navigateToChapterByName 实现自定义转跳逻辑。
  *
@@ -2754,7 +2896,11 @@ const processChapterLinksByName = (container: HTMLElement): void => {
 const afterPageRender = () => {
   if (signal_flag_chapter_load_done.value) {
     if (readerContainer.value === undefined) return
-    removeOversizedImageAttributes(readerContainer.value)
+    if (flag_single_page_mode.value !== true) {
+      removeOversizedImageAttributes(readerContainer.value)
+      fixOversizedImages(readerContainer.value)
+    }
+
     processChapterLinksByName(readerContainer.value)
   }
 }

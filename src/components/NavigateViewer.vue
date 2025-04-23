@@ -80,6 +80,12 @@ const containerStyles = computed(() => ({
   overflow: 'auto',
 }))
 
+watch([props.visible], () => {
+  if (fileContentRef.value !== null) {
+    processFileLinks(fileContentRef.value)
+  }
+})
+
 // ----- 文件模式状态管理 -----
 const htmlContent = ref('')
 const loading = ref(false)

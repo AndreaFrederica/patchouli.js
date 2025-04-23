@@ -16,6 +16,7 @@
   "dependencies": {
     "fast-xml-parser": "^5.2.1",
     "jszip": "^3.10.1",
+    "lodash-es": "^4.17.21",
     "patchouli.js": "file:",
     "pinia": "^2.2.6",
     "tslint": "^6.1.3",
