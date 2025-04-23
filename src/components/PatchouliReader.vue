@@ -41,7 +41,7 @@
       <!-- 控制显示隐藏 -->
       <NavigateViewer
         :url="navi_path"
-        :toc="tocData"
+        :toc="ncx"
         :visible="navigateIsVisible"
         @tocSelect="handleTocSelect"
         @file-select="handleFileSelect"
@@ -64,7 +64,8 @@ import {
   onDeactivated,
 } from 'vue'
 import FloatingControls from '@/components/FloatingControls.vue'
-import NavigateViewer, { type TocEntry } from './NavigateViewer.vue'
+import { loadToc, loadTocRaw, type NavPoint } from './NcxDecoder'
+import NavigateViewer from './NavigateViewer.vue'
 
 const globalTestDivCounter = ref(0)
 const rawDOMtree = ref<HTMLElement>()
@@ -132,6 +133,17 @@ const chapters = ref<string[] | undefined>(undefined)
 const book = ref('caniuse.epub')
 const server = ref('http://localhost:9100')
 const path = ref('/')
+const ncx = ref<NavPoint[] | undefined>(undefined)
+
+const getBookInfo = () => {
+  const reading_book = localStorage.getItem('reading_book')
+  const reading_path = localStorage.getItem('reading_path')
+  if (reading_book !== null && reading_path !== null) {
+    book.value = reading_book
+    path.value = reading_path
+    navigateIsVisible.value = false
+  }
+}
 
 const getChapterUrlByIndex = (index: number) => {
   if (chapters.value === undefined) {
@@ -155,10 +167,26 @@ async function urlExists(url: string): Promise<boolean> {
 }
 
 // 监听子组件目录项选择事件
+/* ------------------------------------------------------------------ */
+/* handleTocSelect – called by <TocNode> ----------------------------- */
 const handleTocSelect = (targetUrl: string) => {
-  console.log('选中的目录项目标 URL：', targetUrl)
-  // 例如：切换到页面模式并更新 URL
-  // pageUrl.value = targetUrl;
+  try {
+    // 1. 解析 URL
+    const u = new URL(targetUrl) // URL() parses & validates :contentReference[oaicite:2]{index=2}
+    const filename = u.pathname.split('/').pop() || '' // chapter007.xhtml :contentReference[oaicite:3]{index=3}
+    // const chapter  = u.hash                            // 可能是 #Ref_9973
+    //   ? `${filename}${u.hash}`                         // 保留锚点 ⇒ chapter007.xhtml#Ref_9973
+    //   : filename;
+    const chapter = u.hash // 可能是 #Ref_9973
+      ? `${filename}` // 保留锚点 ⇒ chapter007.xhtml#Ref_9973
+      : filename
+
+    navigateIsVisible.value = false
+    // 2. 交给跳转逻辑
+    navigateToChapterByName(chapter)
+  } catch (err) {
+    console.error('解析目录 URL 失败: ', err)
+  }
 }
 
 const handleDirSelect = async (path_pop: string) => {
@@ -182,18 +210,14 @@ const handleFileSelect = async (file_name: string) => {
   if (exists) {
     book.value = file_name
     navigateIsVisible.value = false
+    localStorage.setItem('reading_book', file_name)
+    localStorage.setItem('reading_path', path.value)
     await loadBook()
   }
 }
 
 const navi_path = computed(() => `${server.value}${path.value}`)
 
-const tocData = ref<TocEntry[]>([
-  { id: 'np_1', playOrder: 1, label: '扉页', content: 'Text/part0000.xhtml' },
-  { id: 'np_2', playOrder: 2, label: '目录', content: 'Text/part0001.xhtml' },
-  { id: 'np_3', playOrder: 3, label: '推荐序', content: 'Text/part0004.xhtml' },
-  // 其他目录项……
-])
 // 控制组件显示隐藏
 const navigateIsVisible = ref(true)
 
@@ -1070,6 +1094,7 @@ const pagedEnginePointerHighLevel = (
   const savedPart2Container = { part2: undefined as HTMLElement | undefined }
   const pointer_div: [undefined | HTMLElement] = [undefined]
   const old_div_template: [HTMLElement | undefined] = [undefined]
+  const old_element: [HTMLElement | undefined] = [undefined]
 
   elements.forEach((element) => {
     pagedEnginePointerHighLevelCore(
@@ -1084,6 +1109,7 @@ const pagedEnginePointerHighLevel = (
       pointer_div,
       element,
       old_div_template,
+      old_element,
     )
   })
 
@@ -1110,6 +1136,7 @@ const pagedEnginePointerHighLevelCore = (
   pointer_div: [HTMLElement | undefined],
   root_element: HTMLElement,
   old_div_template: [HTMLElement | undefined],
+  old_element: [HTMLElement | undefined],
 ): void => {
   let i = 0
   // 如果 savedPart2 存在，优先处理它
@@ -1129,6 +1156,7 @@ const pagedEnginePointerHighLevelCore = (
       pointer_div,
       root_element,
       old_div_template,
+      old_element,
     )
     i += 1
   }
@@ -1149,54 +1177,9 @@ const pagedEnginePointerHighLevelCore = (
     pointer_div,
     root_element,
     old_div_template,
+    old_element,
   )
 }
-
-// const createTemplateByPath = (rootElement: HTMLElement, path: string) => {
-//   // 1. 拆分路径为每个层级的标志 例如 /div[2]/p[1]/span[3]
-//   const parts = path.split('/').filter(Boolean) // 移除空路径部分
-//   let pointer = rootElement // 从指定的 rootElement 开始
-//   // 2. 创建一个母div作为结果模板
-//   const motherDiv = document.createElement('div') // 这是最外层的母 div
-//   let currentParent = motherDiv // 当前生成的模板中的“父级”
-
-//   parts.forEach((part) => {
-//     console.log('templateGen path', part)
-//     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/i)
-//     if (match) {
-//       console.log('templateGen path_detail', match)
-//       const tagName = match[1].toLowerCase() // 获取标签名 例如 div
-//       const index = parseInt(match[2], 10) // 获取索引 例如 2
-
-//       let counter = 0
-//       let foundElement: HTMLElement | null = null
-//       for (let i = 0; i < pointer.children.length; i++) {
-//         const child = pointer.children[i]
-//         if (child.tagName.toLowerCase() === tagName) {
-//           if (counter === index) {
-//             foundElement = child as HTMLElement
-//             break
-//           }
-//           counter++
-//         }
-//       }
-
-//       if (foundElement) {
-//         pointer = <HTMLElement>foundElement // 将指针指向路径中的子元素
-//         // 3. 使用 cloneElementStyleAndClass 函数克隆当前路径中的元素
-//         const newElement = cloneElementStyleAndClass(pointer) // 只复制样式和类名，不复制子内容
-//         currentParent.appendChild(newElement) // 将新元素插入到母模板中
-//         currentParent = newElement // 将指针移动到下一级
-//       } else {
-//         throw new Error(
-//           `Path error: No ${tagName}[${index}] found in ${pointer.tagName} div=${pointer}`,
-//         )
-//       }
-//     }
-//   })
-
-//   return motherDiv // 返回整个母 div 作为结果
-// }
 
 const createTemplateByPath = (rootElement: HTMLElement, path: string): HTMLElement => {
   // 拆分路径为每级标识，例如 "/div[2]/p[1]/span[3]"
@@ -1339,42 +1322,6 @@ const validateAndUpdatePointer = (
   }
 }
 
-// // 修改后的 getDeepestPointer，去掉最后一级（代表当前元素自身）
-// const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => {
-//   const parts = path.split('/').filter(Boolean)
-//   // 去掉最后一段，因为最后一级表示目标元素自身
-//   parts.pop()
-//   let current: HTMLElement = template
-//   if (parts.length === 0) {
-//     return current
-//   }
-//   for (const part of parts) {
-//     const match = part.match(/([a-zA-Z]+)\[(\d+)\]/)
-//     if (match) {
-//       const tagName = match[1].toLowerCase()
-//       const index = parseInt(match[2], 10)
-//       let counter = 0
-//       let found: HTMLElement | null = null
-//       for (let i = 0; i < current.children.length; i++) {
-//         const child = current.children[i] as HTMLElement
-//         if (child.tagName.toLowerCase() === tagName) {
-//           if (counter === index) {
-//             found = child
-//             break
-//           }
-//           counter++
-//         }
-//       }
-//       if (found) {
-//         current = found
-//       } else {
-//         console.warn(`在模板中找不到对应的节点: ${part}，将保持当前节点`)
-//       }
-//     }
-//   }
-//   return current
-// }
-
 /**
  * 根据自定义的 data-path 属性进行匹配，返回指定路径中倒数第二级（不包括最后一级，也就是目标元素自身）
  * @param template 模板根节点（母 div）
@@ -1408,6 +1355,68 @@ const getDeepestPointer = (template: HTMLElement, path: string): HTMLElement => 
   }
 }
 
+type Segment = { tag: string; index: number }
+
+function lcpLen(a: Segment[], b: Segment[]): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[i].tag === b[i].tag && a[i].index === b[i].index) i++
+  return i
+}
+
+function walkRelative(root: Element, rel: Segment[]): Element {
+  let node: Element = root
+  for (const { tag, index } of rel) {
+    const matches = Array.from(node.children).filter(
+      (c) => c.tagName.toLowerCase() === tag.toLowerCase(),
+    )
+    if (!matches[index]) throw new Error(`Path mismatch at ${tag}[${index}]`)
+    node = matches[index]
+  }
+  return node
+}
+
+/** 重新计算指针 */
+function adjustPointer(
+  oldAbsPath: string,
+  newAbsPath: string,
+  templateRootPath: string,
+  templateRootEl: HTMLElement,
+): HTMLElement {
+  const oldSegs = parsePath(oldAbsPath)
+  const newSegs = parsePath(newAbsPath)
+  const rootSegs = parsePath(templateRootPath)
+
+  const skip = lcpLen(newSegs, rootSegs)
+  const relative = newSegs.slice(skip) // 可能为空
+
+  return walkRelative(templateRootEl, relative) as HTMLElement
+}
+
+/** parsePath 加空值保护 */
+function parsePath(path: string): Segment[] {
+  if (!path || path === '/') return [] // <= 修补
+  return path
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => {
+      const m = seg.match(/^([\w-]+)\[(\d+)]$/)
+      if (!m) throw new Error('Bad segment: ' + seg)
+      return { tag: m[1], index: +m[2] }
+    })
+}
+
+/** adjustPointer 入口保护 */
+function safeAdjustPointer(
+  oldAbs: string,
+  newAbs: string,
+  rootAbs: string,
+  tplRoot: HTMLElement,
+): HTMLElement {
+  // 若 newAbs 为空说明目标节点就是模板根，直接返回
+  if (!newAbs || newAbs === rootAbs) return tplRoot
+  return adjustPointer(oldAbs, newAbs, rootAbs, tplRoot)
+}
+
 // 处理元素的具体分页逻辑
 const pagedEnginePointerHighLevelCoreProcessElement = (
   element: HTMLElement,
@@ -1421,24 +1430,40 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
   pointer_div: [HTMLElement | undefined],
   root_element: HTMLElement,
   old_div_template: [HTMLElement | undefined],
+  old_element: [HTMLElement | undefined],
 ): void => {
-  let tester_container_backup: undefined | HTMLElement = undefined
+  const tester_container_backup: undefined | HTMLElement = undefined
   let next_div_template: HTMLElement | undefined = undefined
   if (nodeIsLeaf(element)) {
     let flag_high_level_paged = false
     let flag_img = false
 
     if (pointer_div[0] === undefined) {
-      // 第一次创建操作指针
-      // console.debug('first_template', div_template)
-      const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
-      // 根据当前 element 对应的路径，重新生成模板
-      const path = getElementPath(root_element, element)
-      console.debug('path', path)
-      // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
-      const correctPointer = getDeepestPointer(clonedTemplate, path)
-      tester_container.appendChild(clonedTemplate)
-      pointer_div[0] = correctPointer
+      if (savedPart2Container.part2 === undefined) {
+        // 第一次创建操作指针
+        // console.debug('first_template', div_template)
+        const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+        // 根据当前 element 对应的路径，重新生成模板
+        const path = getElementPath(root_element, element)
+        console.debug('path', path)
+        // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
+        const correctPointer = getDeepestPointer(clonedTemplate, path)
+        tester_container.appendChild(clonedTemplate)
+        pointer_div[0] = correctPointer
+      } else {
+        if (old_div_template[0] !== undefined) {
+          // 第一次创建操作指针
+          // console.debug('first_template', div_template)
+          const clonedTemplate = (old_div_template[0] as HTMLElement).cloneNode(true) as HTMLElement
+          // 根据当前 element 对应的路径，重新生成模板
+          const path = getElementPath(root_element, <HTMLElement>old_element[0])
+          console.debug('old-path', path)
+          // 从模板中获得正确的插入指针（不包含目标元素自身的层级）
+          const correctPointer = getDeepestPointer(clonedTemplate, path)
+          tester_container.appendChild(clonedTemplate)
+          pointer_div[0] = correctPointer
+        }
+      }
     } else {
       // 每次插入元素前都验证当前模板是否匹配
       // 假设当前模板为 tester_container.firstElementChild（或其他保存的模板引用）
@@ -1455,7 +1480,32 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
 
       const path = getElementPath(root_element, element)
 
-      const newTemplate = createTemplateByPath(root_element, path)
+      /* ---------- 1. 把“父路径”算出来 ------------ */
+      // 原来的 fullPath = getElementPath(root_element, element)
+      const fullPath = getElementPath(root_element, element)
+      const parentPath = fullPath.replace(/\/[^/]+$/, '') || '/' // ↩︎ 叶节点的父级
+
+      /* ---------- 2. 生成模板时拿父路径 ------------ */
+      const newTemplate = createTemplateByPath(root_element, parentPath)
+
+      /* 不再因 children.length === 1 就盲目解包，除非你确实知道模板外壳只是 <template> */
+      const unwrappedTemplate = newTemplate // ← 直接用
+
+      /* ---------- 3. 模板比较用 isEqualNode ---------- */
+      if (!currentTemplate?.isEqualNode(newTemplate)) {
+        /* 3-1 先挂模板，注意要插在旧指针之后 */
+        pointer_div[0]!.parentElement!.insertBefore(unwrappedTemplate, pointer_div[0]!.nextSibling)
+
+        /* 3-2 重新定位指针 —— 现在用 parentPath 而不是 fullPath */
+        const oldAbs = getElementPath(root_element, pointer_div[0]!)
+        pointer_div[0] = safeAdjustPointer(
+          oldAbs,
+          parentPath, // ← 目标容器的绝对路径
+          parentPath, // ← 模板根路径 == 父路径
+          unwrappedTemplate,
+        )
+      }
+
       console.debug(
         'path',
         path,
@@ -1466,39 +1516,6 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
         '老指针',
         pointer_div[0],
       )
-      // 如果模板发生了更新，替换 tester_container 的内容和 pointer_div
-      if (newTemplate !== currentTemplate) {
-        console.debug('模板更新', 'new=', newTemplate, 'old=', currentTemplate)
-        tester_container_backup = tester_container.cloneNode(true) as HTMLElement
-        // 尝试去掉 newTemplate 的多余外壳
-        let unwrappedTemplate: HTMLElement = newTemplate
-        // 如果 newTemplate 只有一个子元素，则认为这个子元素是实际需要的模板
-        if (newTemplate.children.length === 1) {
-          unwrappedTemplate = newTemplate.firstElementChild as HTMLElement
-        }
-        //TODO 这边有bug 新指针路径不能这么算 应该写一个算法 根据老模板和新模板算出正确的指针
-        // 获取当前指针的父容器
-        const parentContainer = pointer_div[0].parentElement
-        if (parentContainer) {
-          // 在当前指针的后面插入解包后的模板作为新的内容
-          parentContainer.insertBefore(unwrappedTemplate, pointer_div[0].nextSibling)
-        } else {
-          // 备用方案：直接追加到 tester_container 内
-          tester_container.appendChild(unwrappedTemplate)
-        }
-
-        // 重新根据当前 element 的路径计算新的指针
-        const newPath = getElementPath(root_element, element)
-        const adjustedNewPointer = getDeepestPointer(unwrappedTemplate, newPath)
-        pointer_div[0] = adjustedNewPointer
-        console.debug('新指针', adjustedNewPointer)
-      }
-      // if (newTemplate !== currentTemplate) {
-      //   // 不清空 tester_container，而是在其已有内容后追加新的模板
-      //   tester_container.appendChild(newTemplate)
-      //   // 更新操作指针为新模板中的指针
-      //   pointer_div[0] = newPointer
-      // }
     }
 
     // 最后，将当前元素克隆后插入到当前的正确模板中
@@ -1561,21 +1578,21 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
 
         pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
 
-        // 获取新的操作指针
         current_page.length = 0
         tester_container.innerHTML = ''
         flag_high_level_paged = false
-        // console.debug('template', div_template)
-        // 克隆外层模板
-        const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
-        // 根据当前 element 对应的路径，找到模板中对应的内部节点
-        const path = getElementPath(root_element, element)
-        console.debug('path', path)
-        const correctPointer = getDeepestPointer(clonedTemplate, path)
-        // 将整个模板挂到测试容器上
-        tester_container.appendChild(clonedTemplate)
-        // 设置 pointer_div 指向最内层的指针
-        pointer_div[0] = correctPointer
+        // // console.debug('template', div_template)
+        // // 克隆外层模板
+        // const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+        // // 根据当前 element 对应的路径，找到模板中对应的内部节点
+        // const path = getElementPath(root_element, element)
+        // console.debug('path', path)
+        // const correctPointer = getDeepestPointer(clonedTemplate, path)
+        // // 将整个模板挂到测试容器上
+        // tester_container.appendChild(clonedTemplate)
+        // // 设置 pointer_div 指向最内层的指针
+        // pointer_div[0] = correctPointer
+        pointer_div[0] = undefined
         // 将 part2 保存到 container 中，便于后续处理
         savedPart2Container.part2 = part2.cloneNode(true) as HTMLElement
       } else {
@@ -1604,6 +1621,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
             current_page.push(newDiv)
 
             pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+            old_element[0] = <HTMLElement>element.cloneNode(true)
           } else {
             const newDiv = document.createElement('div')
             Array.from(tester_container.childNodes).forEach((child) => {
@@ -1612,6 +1630,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
             current_page.push(newDiv)
 
             pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
+            old_element[0] = <HTMLElement>element.cloneNode(true)
           }
 
           current_page.length = 0
@@ -1620,29 +1639,20 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           // 获取新的操作指针
           // console.debug('template', div_template)
           // 克隆外层模板
-          const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
-          // 根据当前 element 对应的路径，找到模板中对应的内部节点
-          const path = getElementPath(root_element, element)
-          console.debug('path', path)
-          const correctPointer = getDeepestPointer(clonedTemplate, path)
-          // 将整个模板挂到测试容器上
-          tester_container.appendChild(clonedTemplate)
-          // 设置 pointer_div 指向最内层的指针
-          pointer_div[0] = correctPointer
+          // const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+          // // 根据当前 element 对应的路径，找到模板中对应的内部节点
+          // const path = getElementPath(root_element, element)
+          // console.debug('path', path)
+          // const correctPointer = getDeepestPointer(clonedTemplate, path)
+          // // 将整个模板挂到测试容器上
+          // tester_container.appendChild(clonedTemplate)
+          // // 设置 pointer_div 指向最内层的指针
+          // pointer_div[0] = correctPointer
+          old_element[0] = <HTMLElement>element.cloneNode(true)
+          pointer_div[0] = undefined
           // neo_pointer.appendChild(element)
           savedPart2Container.part2 = <HTMLElement>element.cloneNode(true)
         } else {
-          // current_page.push((pointer_div[0] as HTMLElement).cloneNode(true) as HTMLElement)
-          // pages_list.push(cloneHTMLElementList(current_page)) // 保存当前页
-
-          // current_page.length = 0
-          // tester_container.innerHTML = ''
-          // flag_high_level_paged = false
-          // // 获取新的操作指针
-          // let neo_pointer = (div_template as HTMLElement).cloneNode(true)
-          // tester_container.appendChild(neo_pointer)
-          // pointer_div[0] = <HTMLElement>neo_pointer
-
           ;(pointer_div[0] as HTMLElement).appendChild(element)
           console.warn('div_template', div_template)
 
@@ -1660,29 +1670,22 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           // 获取新的操作指针
           // console.debug('template', div_template)
           // 克隆外层模板
-          const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
-          // 根据当前 element 对应的路径，找到模板中对应的内部节点
-          const path = getElementPath(root_element, element)
-          console.debug('path', path)
-          const correctPointer = getDeepestPointer(clonedTemplate, path)
-          // 将整个模板挂到测试容器上
-          tester_container.appendChild(clonedTemplate)
-          // 设置 pointer_div 指向最内层的指针
-          pointer_div[0] = correctPointer
+          // const clonedTemplate = (div_template as HTMLElement).cloneNode(true) as HTMLElement
+          // // 根据当前 element 对应的路径，找到模板中对应的内部节点
+          // const path = getElementPath(root_element, element)
+          // console.debug('path', path)
+          // const correctPointer = getDeepestPointer(clonedTemplate, path)
+          // // 将整个模板挂到测试容器上
+          // tester_container.appendChild(clonedTemplate)
+          // // 设置 pointer_div 指向最内层的指针
+          // pointer_div[0] = correctPointer
+          pointer_div[0] = undefined
+          old_element[0] = <HTMLElement>element.cloneNode(true)
         }
       }
     }
   } else {
     console.debug('element', element)
-    // if (div_template === undefined) {
-    //   const path = getElementPath(element)
-    //   console.log(path)
-    //   next_div_template = createTemplateByPath(root_element, path)
-    // } else {
-    //   const last_template = cloneElementStyleAndClassWithPath(div_template)
-    //   const current_path = getElementPath(element)
-    //   next_div_template = last_template.appendChild(createTemplateByPath(root_element, current_path))
-    // }
     const path = getElementPath(root_element, element)
     console.debug('path', path)
     next_div_template = createTemplateByPath(root_element, path)
@@ -1701,6 +1704,7 @@ const pagedEnginePointerHighLevelCoreProcessElement = (
           pointer_div,
           root_element,
           old_div_template,
+          old_element,
         )
       }
     })
@@ -2579,6 +2583,7 @@ onMounted(async () => {
   })
   // await loadContent('content.html') //! 加载内容
   /* ===== 用例示例 ===== */
+  getBookInfo()
   await loadBook()
 })
 
@@ -2586,8 +2591,10 @@ async function loadBook() {
   let load_chapter: undefined | string = undefined
 
   const opfUrl = `${server.value}${path.value}${book.value}/content.opf`
+  const ncxUrl = `${server.value}${path.value}${book.value}/toc.ncx`
   const opf_exist = await urlExists(opfUrl)
   if (opf_exist) {
+    ncx.value = await loadTocRaw(ncxUrl)
     flag_epub_mode.value = true
     let index: undefined | number = undefined
     try {
@@ -2596,6 +2603,7 @@ async function loadBook() {
 
       console.log('书籍元数据：', metadata)
       console.log('阅读顺序列表：', readingOrder)
+      console.log('目录', ncx.value)
       if (readingOrder.length !== 0) {
         chapters.value = readingOrder
         let progress_chapter = Number(localStorage.getItem('chapter'))

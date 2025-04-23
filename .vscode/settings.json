@@ -40,5 +40,8 @@
   ],
   "python.autoComplete.extraPaths": [
     "c:/Users/87975/.vscode/extensions/rt-thread.rt-thread-micropython-1.0.11/microExamples/code-completion"
-  ]
+  ],
+  "[typescript]": {
+    "editor.defaultFormatter": "ms-vsliveshare.vsliveshare"
+  }
 }

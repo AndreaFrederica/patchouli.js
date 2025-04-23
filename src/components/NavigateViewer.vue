@@ -18,15 +18,15 @@
         <div v-else v-html="htmlContent" ref="fileContentRef"></div>
       </template>
 
-      <!-- 书籍目录模式：展示书籍目录列表 -->
-      <template v-else-if="currentTab === 'directory'">
+      <!-- 目录模式：递归渲染 -->
+      <template v-else>
         <ul class="toc-list">
-          <li v-for="item in toc!" :key="item.id">
-            <!-- 点击书籍目录项时，触发 handleTocClick 事件 -->
-            <a href="#" @click.prevent="handleTocClick(item)">
-              {{ item.label }}
-            </a>
-          </li>
+          <TocNode
+            v-for="node in toc || []"
+            :key="node.id"
+            :node="node"
+            @tocSelect="emit('tocSelect', $event)"
+          />
         </ul>
       </template>
     </div>
@@ -34,22 +34,25 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, watch, computed, defineProps, defineEmits, nextTick } from 'vue'
-
-// 定义书籍目录项类型（从 toc.ncx 解析得到）
-export interface TocEntry {
-  id: string
-  playOrder: number
-  label: string
-  content: string
-}
+import {
+  ref,
+  onMounted,
+  watch,
+  computed,
+  defineProps,
+  defineEmits,
+  nextTick,
+  h,
+  defineComponent,
+} from 'vue'
+import { type NavPoint } from './NcxDecoder'
 
 // 定义组件 Props
 interface Props {
   // 文件模式下需要的 URL
   url?: string
   // 书籍目录模式下需要的书籍目录列表
-  toc?: TocEntry[]
+  toc?: NavPoint[]
   // 控制组件是否可见
   visible: boolean
 }
@@ -212,6 +215,30 @@ const processFileLinks = (container: HTMLElement): void => {
     // 其他情况不做处理
   })
 }
+/* ---------- 递归目录子组件 ---------- */
+const TocNode = defineComponent({
+  name: 'TocNode',
+  props: { node: { type: Object, required: true } },
+  emits: ['tocSelect'],
+  setup(p, { emit }) {
+    const click = (e: Event) => {
+      e.preventDefault()
+      emit('tocSelect', p.node.src)
+    }
+    return () =>
+      h('li', [
+        h('a', { href: '#', onClick: click }, p.node.label),
+        // p.node.children?.length && 暂时先注释掉
+        h(
+          'ul',
+          { class: 'toc-sub' },
+          p.node.children.map((c) =>
+            h(TocNode, { node: c, onTocSelect: (u: string) => emit('tocSelect', u) }),
+          ),
+        ),
+      ])
+  },
+})
 </script>
 
 <style scoped>
