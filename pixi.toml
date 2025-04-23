@@ -1,0 +1,18 @@
+[workspace]
+authors = ["AndreaFrederica <andreafrederica@outlook.com>"]
+channels = ["conda-forge"]
+name = "patchouli.js"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+dev = { cmd = ["uvicorn", "epub:app", "--host", "0.0.0.0", "--reload"] ,cwd = "dev"}
+web = { cmd = ["pnpm", "dev"]}
+
+
+[dependencies]
+python = ">=3.13.3,<3.14"
+
+[pypi-dependencies]
+fastapi = ">=0.115.12, <0.116"
+uvicorn = ">=0.34.2, <0.35"
