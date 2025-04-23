@@ -6,7 +6,7 @@ platforms = ["win-64"]
 version = "0.1.0"
 
 [tasks]
-dev = { cmd = ["uvicorn", "epub:app", "--host", "0.0.0.0", "--reload"] ,cwd = "dev"}
+dev = { cmd = ["uvicorn", "epub:app", "--host", "0.0.0.0","--port","9100", "--reload"] ,cwd = "dev"}
 web = { cmd = ["pnpm", "dev"]}
 
 
